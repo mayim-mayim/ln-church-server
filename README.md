@@ -1,8 +1,8 @@
-# ⛩️ ln-church-monzenmachi (門前町)
+# ⛩️ ln-church-server (Monzenmachi / 門前町)
 
-**The Gateway for the Agentic Web.** Stop building paywalls for humans. Start building gateways for AI Agents.
+> **The Gateway for the Agentic Web.** > Stop building paywalls for humans. Start building gateways for AI Agents.
 
-`ln-church-monzenmachi` は、あなたのAPIを **HTTP 402 Payment Required** に対応させ、AIエージェントが自律的に「資金調達 → 支払い → 実行」を行えるようにするための、プラグイン可能なミドルウェアSDKです。
+`ln-church-server` は、あなたのAPIを **HTTP 402 Payment Required** に対応させ、AIエージェントが自律的に「資金調達 → 支払い → 実行」を行えるようにするための、プラグイン可能なミドルウェアSDKです。
 
 
 
