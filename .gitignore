@@ -1,15 +1,27 @@
-# node_modules
+# ========================
+# Node.js & npm
+# ========================
 node_modules/
 **/node_modules/
+npm-debug.log*
+yarn-error.log*
 
+# ========================
 # Build outputs
+# ========================
 dist/
 **/dist/
 
-# Env files
+# ========================
+# Env files (Security)
+# ========================
 .env
 .env.*
 
-# OS files
+# ========================
+# OS & Editor files
+# ========================
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
