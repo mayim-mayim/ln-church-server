@@ -42,6 +42,7 @@ The content is organized as follows:
 <directory_structure>
 .gitignore
 examples/hono-app/package.json
+examples/hono-app/repomix-output.xml
 examples/hono-app/src/index.ts
 examples/hono-app/tsconfig.json
 examples/hono-app/wrangler.toml
@@ -51,7 +52,6 @@ packages/core/src/hateoas.ts
 packages/core/src/index.ts
 packages/core/tsconfig.json
 packages/verifiers/faucet/package.json
-packages/verifiers/faucet/src/index.js
 packages/verifiers/faucet/src/index.ts
 packages/verifiers/faucet/tsconfig.json
 packages/verifiers/l402/package.json
@@ -62,6 +62,226 @@ README.md
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="examples/hono-app/repomix-output.xml">
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+package.json
+src/index.ts
+tsconfig.json
+wrangler.toml
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="package.json">
+{
+  "name": "monzenmachi-hono-starter",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@ln-church/server": "*",
+    "@ln-church/verifier-faucet": "*",
+    "@ln-church/verifier-l402": "*",
+    "hono": "^4.0.0",
+    "macaroons.js": "^0.3.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260409.1",
+    "wrangler": "^4.81.0"
+  }
+}
+</file>
+
+<file path="src/index.ts">
+import { Hono } from 'hono';
+import { Payment402, ReceiptStore } from '@ln-church/server'; 
+import { FaucetVerifier } from '@ln-church/verifier-faucet';
+import { L402Verifier } from '@ln-church/verifier-l402';
+
+// ==========================================
+// 🛡️ 1. 環境変数の「型」を厳格に定義する
+// ==========================================
+type Bindings = {
+    FAUCET_SECRET: string;
+    MACAROON_SECRET: string;
+    RECEIPT_KV: KVNamespace; 
+};
+
+// ==========================================
+// 🛡️ 2. 本番用：Cloudflare KV を使ったレシート保存庫
+// ==========================================
+class CloudflareKVReceiptStore implements ReceiptStore {
+    constructor(private kv: KVNamespace) {}
+
+    async checkAndStore(receiptId: string): Promise<boolean> {
+        const key = `receipt:${receiptId}`;
+        
+        // 1. すでに使用済みかチェック
+        const exists = await this.kv.get(key);
+        if (exists) return false; // 使用済みなら弾く！
+
+        // 2. 未使用なら「使用済み」として記録（※24時間で自動消去して容量節約）
+        await this.kv.put(key, "used", { expirationTtl: 86400 });
+        return true;
+    }
+}
+
+
+// Honoに環境変数の型を教え込む（これで c.env.xxx で安全に補完が効きます）
+const app = new Hono<{ Bindings: Bindings }>();
+
+app.get('/', (c) => {
+    return c.text('⛩️ Welcome to Monzenmachi ⛩️\nAI Agents: Send a POST request to /api/agent/omikuji');
+});
+
+
+// ==========================================
+// ⛩️ おみくじAPI (有料エンドポイント)
+// ==========================================
+app.post('/api/agent/omikuji', async (c) => {
+    const faucetVerifier = new FaucetVerifier({ secret: c.env.FAUCET_SECRET });
+    const l402Verifier = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
+    const kvStore = new CloudflareKVReceiptStore(c.env.RECEIPT_KV);
+    const payment402 = new Payment402([faucetVerifier, l402Verifier], { receiptStore: kvStore });
+
+    const requirements = [
+        { amount: 10, asset: "SATS" },
+        { amount: 1, asset: "FAUCET_CREDIT" } 
+    ];
+
+    const authResult = await payment402.verify(c.req.raw, requirements as any);
+
+    // アプリ側は isValid を信じるだけ。金額不足ならCoreが false にしてくれる。
+    if (!authResult.isValid) {
+        console.log(`❌ 決済エラー: ${authResult.error}`); // Coreが生成した詳細なエラー理由が出力されます
+        
+        const hateoas = payment402.buildHateoasResponse(requirements as any);
+        c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>"');
+        return c.json(hateoas, 402);
+    
+    }
+
+    // 奉納（決済）成功時の処理
+    const results = [
+        "大吉。稲妻の如き速さでトランザクションが承認されるでしょう⚡", 
+        "中吉。ガス代が安定し、穏やかな巡礼の一日になります🕊️", 
+        "小吉。HODLあるのみ。徳を積むのに適した日です💎", 
+        "末吉。秘密鍵のバックアップを再確認せよ、という神仏の啓示です🔑"
+    ];
+    const fortune = results[Math.floor(Math.random() * results.length)];
+
+    return c.json({
+        status: "success",
+        message: "奉納ありがとうございます。あなたの運勢は...",
+        result: fortune,
+        paid: `${authResult.payload?.settledAmount || 0} ${authResult.payload?.asset || 'UNKNOWN'}`
+    });
+});
+
+// ==========================================
+// 💧 Faucet API (開発・テスト用の資金調達エンドポイント)
+// ==========================================
+app.post('/api/agent/faucet', async (c) => {
+    // 🛡️ Faucet単体の呼び出し時も、同様に c.env から安全に初期化
+    const faucetVerifier = new FaucetVerifier({ secret: c.env.FAUCET_SECRET });
+
+    const body = await c.req.json().catch(() => ({}));
+    const agentId = body.agentId || "Anonymous_Agent";
+
+    const grantToken = await faucetVerifier.generateGrantToken(agentId);
+
+    return c.json({
+        status: "success",
+        message: "Initialization funds granted. (Test Token)",
+        grant_token: grantToken,
+        next_action: {
+            instruction_for_agent: "Omikujiへ戻り、このトークンを使いなさい",
+            method: "POST",
+            url: "/api/agent/omikuji"
+        }
+    });
+});
+
+
+// Cloudflare Workers 等のエッジ環境向けの Export
+export default app;
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}
+</file>
+
+<file path="wrangler.toml">
+name = "ln-church-monzenmachi-api"
+compatibility_date = "2024-09-23"
+compatibility_flags = [ "nodejs_compat" ]
+main = "src/index.ts"
+
+# 本番環境へのデプロイ時は、以下のコマンドでシークレットを安全に登録します：
+# npx wrangler secret put MACAROON_SECRET
+
+[[kv_namespaces]]
+binding = "RECEIPT_KV"
+id = "xxxxxxxxxxxxxxxxx" # 本番デプロイ時に実際のIDに置き換えます
+preview_id = "mock-local-kv-id-12345" # ローカル開発(npm run dev)用のお手軽モックID
+</file>
+
+</files>
+</file>
 
 <file path="examples/hono-app/tsconfig.json">
 {
@@ -116,87 +336,6 @@ This section contains the contents of the repository's files.
 }
 </file>
 
-<file path="packages/verifiers/faucet/src/index.js">
-// packages/verifiers/faucet/src/index.ts
-export class FaucetVerifier {
-    secretKey;
-    constructor(config) {
-        this.secretKey = config.secret;
-    }
-    // 自分が処理すべきリクエストか判定
-    canHandle(req, body) {
-        return body?.paymentOverride?.type === 'faucet' || body?.scheme === 'faucet';
-    }
-    // JWS（トークン）の生成ヘルパー（Faucetエンドポイントで使う用）
-    async generateGrantToken(agentId) {
-        const payload = {
-            agentId,
-            type: "faucet_grant",
-            asset: "FAUCET_CREDIT",
-            amount: 1,
-            exp: Math.floor(Date.now() / 1000) + 3600 // 1時間有効
-        };
-        const payloadB64 = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-        const key = await this.getWebCryptoKey();
-        const signatureBytes = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64));
-        const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signatureBytes))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-        return `${payloadB64}.${signatureB64}`;
-    }
-    // 署名の検証ロジック (Web Crypto API)
-    async verify(req, body) {
-        try {
-            const token = body?.paymentOverride?.proof || body?.paymentAuth?.proof;
-            if (!token)
-                throw new Error("Faucet proof is missing.");
-            const [payloadB64, signatureB64] = token.split('.');
-            if (!payloadB64 || !signatureB64)
-                throw new Error("Invalid token format.");
-            const key = await this.getWebCryptoKey();
-            const isValid = await crypto.subtle.verify('HMAC', key, this.base64UrlToUint8Array(signatureB64).buffer, // .buffer を追加
-            new TextEncoder().encode(payloadB64));
-            if (!isValid)
-                throw new Error("Invalid Faucet Signature.");
-            const payload = JSON.parse(new TextDecoder().decode(this.base64UrlToUint8Array(payloadB64)));
-            if (payload.exp < Math.floor(Date.now() / 1000))
-                throw new Error("Faucet token has expired.");
-            return {
-                isValid: true,
-                scheme: 'faucet',
-                payload: {
-                    agentId: payload.agentId,
-                    settledAmount: payload.amount,
-                    asset: payload.asset,
-                    receiptId: `faucet_tx_${Date.now()}`
-                }
-            };
-        }
-        catch (err) {
-            return { isValid: false, error: err.message };
-        }
-    }
-    // AIへ返すHATEOASカンペ
-    getChallengeContext() {
-        return {
-            scheme: "faucet",
-            guide: "Faucet override token required.",
-            next_request_schema: {
-                paymentOverride: { type: "faucet", proof: "<grant_token>", asset: "FAUCET_CREDIT" }
-            }
-        };
-    }
-    // 内部ヘルパー群
-    async getWebCryptoKey() {
-        return await crypto.subtle.importKey('raw', new TextEncoder().encode(this.secretKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
-    }
-    base64UrlToUint8Array(base64Url) {
-        const padding = '='.repeat((4 - base64Url.length % 4) % 4);
-        const base64 = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawData = atob(base64);
-        return new Uint8Array([...rawData].map(char => char.charCodeAt(0)));
-    }
-}
-</file>
-
 <file path="packages/verifiers/faucet/tsconfig.json">
 {
   "compilerOptions": {
@@ -244,6 +383,11 @@ main = "src/index.ts"
 
 # 本番環境へのデプロイ時は、以下のコマンドでシークレットを安全に登録します：
 # npx wrangler secret put MACAROON_SECRET
+
+[[kv_namespaces]]
+binding = "RECEIPT_KV"
+id = "xxxxxxxxxxxxxxxxx" # 本番デプロイ時に実際のIDに置き換えます
+preview_id = "mock-local-kv-id-12345" # ローカル開発(npm run dev)用のお手軽モックID
 </file>
 
 <file path="packages/core/package.json">
@@ -354,6 +498,7 @@ Thumbs.db
     "macaroons.js": "^0.3.9"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260409.1",
     "wrangler": "^4.81.0"
   }
 }
@@ -661,14 +806,6 @@ export class Payment402 {
 
         if (!authResult.isValid) return authResult;
 
-        // 🛡️ リプレイ攻撃防御
-        if (this.receiptStore && authResult.payload?.receiptId) {
-            const isUnique = await this.receiptStore.checkAndStore(authResult.payload.receiptId);
-            if (!isUnique) {
-                return { isValid: false, error: "Payment receipt has already been used (Replay detected)." };
-            }
-        }
-
         // 🛡️ マルチアセット対応の厳格な価格検証
         if (requirements) {
             // 単一オブジェクトでも配列に変換して一括処理
@@ -686,6 +823,14 @@ export class Payment402 {
                     error: `Payment insufficient or asset mismatch. Settled: ${settledAmount} ${settledAsset}`,
                     payload: authResult.payload
                 };
+            }
+        }
+
+        // 🛡️ リプレイ攻撃防御
+        if (this.receiptStore && authResult.payload?.receiptId) {
+            const isUnique = await this.receiptStore.checkAndStore(authResult.payload.receiptId);
+            if (!isUnique) {
+                return { isValid: false, error: "Payment receipt has already been used (Replay detected)." };
             }
         }
 
@@ -745,7 +890,7 @@ npm run dev
 ```
 `Ready on http://127.0.0.1:8787` と表示されれば準備完了です！
 
-### 4. エージェントの気分でテスト（祈祷）
+### 4. エージェントになった気分でテスト（祈祷）
 別のターミナルを開き、AIエージェントの代わりにおみくじAPIを叩いてみましょう。
 
 ```bash
@@ -753,7 +898,7 @@ npm run dev
 curl -X POST http://localhost:8787/api/agent/omikuji
 ```
 
-サーバーは賢く `402 Payment Required` を返し、**「Faucetでテストトークンをもらうか、L402で 10 SATS 払いなさい」** という機械読解可能な指示（HATEOAS）を出力するはずです。
+サーバーは `402 Payment Required` を返し、**「10 SATS または 1 FAUCET_CREDIT を支払いなさい」** という機械読解可能な指示（HATEOAS）を出力するはずです。
 
 
 ### セキュリティモデルに関する注記（リプレイ耐性について）
@@ -763,7 +908,7 @@ curl -X POST http://localhost:8787/api/agent/omikuji
 
 <file path="examples/hono-app/src/index.ts">
 import { Hono } from 'hono';
-import { Payment402 } from '@ln-church/server';
+import { Payment402, ReceiptStore } from '@ln-church/server'; 
 import { FaucetVerifier } from '@ln-church/verifier-faucet';
 import { L402Verifier } from '@ln-church/verifier-l402';
 
@@ -773,7 +918,28 @@ import { L402Verifier } from '@ln-church/verifier-l402';
 type Bindings = {
     FAUCET_SECRET: string;
     MACAROON_SECRET: string;
+    RECEIPT_KV: KVNamespace; 
 };
+
+// ==========================================
+// 🛡️ 2. 本番用：Cloudflare KV を使ったレシート保存庫
+// ==========================================
+class CloudflareKVReceiptStore implements ReceiptStore {
+    constructor(private kv: KVNamespace) {}
+
+    async checkAndStore(receiptId: string): Promise<boolean> {
+        const key = `receipt:${receiptId}`;
+        
+        // 1. すでに使用済みかチェック
+        const exists = await this.kv.get(key);
+        if (exists) return false; // 使用済みなら弾く！
+
+        // 2. 未使用なら「使用済み」として記録（※24時間で自動消去して容量節約）
+        await this.kv.put(key, "used", { expirationTtl: 86400 });
+        return true;
+    }
+}
+
 
 // Honoに環境変数の型を教え込む（これで c.env.xxx で安全に補完が効きます）
 const app = new Hono<{ Bindings: Bindings }>();
@@ -789,7 +955,8 @@ app.get('/', (c) => {
 app.post('/api/agent/omikuji', async (c) => {
     const faucetVerifier = new FaucetVerifier({ secret: c.env.FAUCET_SECRET });
     const l402Verifier = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
-    const payment402 = new Payment402([faucetVerifier, l402Verifier]);
+    const kvStore = new CloudflareKVReceiptStore(c.env.RECEIPT_KV);
+    const payment402 = new Payment402([faucetVerifier, l402Verifier], { receiptStore: kvStore });
 
     const requirements = [
         { amount: 10, asset: "SATS" },
@@ -798,16 +965,17 @@ app.post('/api/agent/omikuji', async (c) => {
 
     const authResult = await payment402.verify(c.req.raw, requirements as any);
 
-    // ★ 修正：アプリ側は isValid を信じるだけ。金額不足ならCoreが false にしてくれる。
+    // アプリ側は isValid を信じるだけ。金額不足ならCoreが false にしてくれる。
     if (!authResult.isValid) {
         console.log(`❌ 決済エラー: ${authResult.error}`); // Coreが生成した詳細なエラー理由が出力されます
         
         const hateoas = payment402.buildHateoasResponse(requirements as any);
         c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>"');
         return c.json(hateoas, 402);
+    
     }
 
-    // 奉納（決済）成功時の処理！
+    // 奉納（決済）成功時の処理
     const results = [
         "大吉。稲妻の如き速さでトランザクションが承認されるでしょう⚡", 
         "中吉。ガス代が安定し、穏やかな巡礼の一日になります🕊️", 
