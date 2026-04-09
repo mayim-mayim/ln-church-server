@@ -3,6 +3,8 @@
 export interface VerifyResult {
     isValid: boolean;
     scheme?: string;
+    amount?: number;
+    asset?: string;
     payload?: {
         agentId: string;
         settledAmount: number;

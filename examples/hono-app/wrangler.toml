@@ -1,0 +1,6 @@
+name = "ln-church-monzenmachi-api"
+compatibility_date = "2024-04-09"
+main = "src/index.ts"
+
+# 本番環境へのデプロイ時は、以下のコマンドでシークレットを安全に登録します：
+# npx wrangler secret put MACAROON_SECRET
