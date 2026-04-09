@@ -1,10 +1,7 @@
-// packages/core/src/index.ts
 
 export interface VerifyResult {
     isValid: boolean;
     scheme?: string;
-    amount?: number;
-    asset?: string;
     payload?: {
         agentId: string;
         settledAmount: number;
@@ -20,37 +17,60 @@ export interface PaymentVerifier {
     getChallengeContext(): Record<string, any>;
 }
 
-// 要求額の型を定義
 export interface PaymentRequirement {
     amount: number;
     asset: string;
 }
 
-export class Payment402 {
-    constructor(private verifiers: PaymentVerifier[]) {}
+// 🌟 GPT先生に指摘された「実体のない設計」を本物の実装へ！
+export interface ReceiptStore {
+    checkAndStore(receiptId: string): Promise<boolean>;
+}
 
-    // 2. verifyメソッドに requirement パラメータを追加
-    public async verify(req: any, requirement?: PaymentRequirement): Promise<VerifyResult> {
-        // ※ここでは既存の verifier ループ処理があると仮定しています
+export class Payment402 {
+    private receiptStore?: ReceiptStore;
+
+    // オプションで ReceiptStore を受け取れるように変更
+    constructor(private verifiers: PaymentVerifier[], options?: { receiptStore?: ReceiptStore }) {
+        this.receiptStore = options?.receiptStore;
+    }
+
+    // 🌟 Requirement を配列（複数決済手段のOR条件）で受け取れるように進化！
+    public async verify(req: any, requirements?: PaymentRequirement | PaymentRequirement[]): Promise<VerifyResult> {
         let authResult: VerifyResult = { isValid: false, error: "No valid payment proof provided." };
 
         for (const verifier of this.verifiers) {
             if (verifier.canHandle(req)) {
                 authResult = await verifier.verify(req);
-                break; // 処理できるVerifierが見つかったら検証して抜ける
+                break;
             }
         }
 
-        // 🛡️ 3. 新機能：コア側で金額とアセットを厳格に比較する
-        if (authResult.isValid && requirement) {
+        if (!authResult.isValid) return authResult;
+
+        // 🛡️ リプレイ攻撃防御
+        if (this.receiptStore && authResult.payload?.receiptId) {
+            const isUnique = await this.receiptStore.checkAndStore(authResult.payload.receiptId);
+            if (!isUnique) {
+                return { isValid: false, error: "Payment receipt has already been used (Replay detected)." };
+            }
+        }
+
+        // 🛡️ マルチアセット対応の厳格な価格検証
+        if (requirements) {
+            // 単一オブジェクトでも配列に変換して一括処理
+            const reqArray = Array.isArray(requirements) ? requirements : [requirements];
             const settledAmount = authResult.payload?.settledAmount || 0;
             const settledAsset = authResult.payload?.asset || "UNKNOWN";
 
-            if (settledAmount < requirement.amount || settledAsset !== requirement.asset) {
-                // 要求額を満たしていない場合は、心を鬼にして false に上書きする
+            // ★ 提示された要求の「どれか一つ」でも満たしていれば isMet = true になる！
+            const isMet = reqArray.some(req => settledAmount >= req.amount && settledAsset === req.asset);
+
+            if (!isMet) {
                 return {
                     isValid: false,
-                    error: `Payment insufficient or asset mismatch. Required: ${requirement.amount} ${requirement.asset}, Settled: ${settledAmount} ${settledAsset}`,
+                    // エラーメッセージもundefinedが出ないように修正
+                    error: `Payment insufficient or asset mismatch. Settled: ${settledAmount} ${settledAsset}`,
                     payload: authResult.payload
                 };
             }
@@ -59,11 +79,8 @@ export class Payment402 {
         return authResult;
     }
 
-    // お金がない時に返す「完璧なHATEOAS（402エラー）」を生成する
     buildHateoasResponse(price: number, asset: string) {
-        // 登録されている全プラグインからAI向けの指示書（カンペ）をかき集める
         const instructions = this.verifiers.map(v => v.getChallengeContext());
-        
         return {
             error: "Payment Required",
             message: `奉納額 ${price} ${asset} が必要です。`,

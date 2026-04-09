@@ -78,16 +78,33 @@ export class FaucetVerifier implements PaymentVerifier {
         }
 
         try {
-            // ==========================================
-            // ※必要に応じて既存のトークン検証（HMACなど）ロジックをここに復元
-            // ==========================================
+            // 🌟 封印されしHMAC検証ロジックを完全復活！
+            const [payloadB64, signatureB64] = token.split('.');
+            if (!payloadB64 || !signatureB64) throw new Error("Invalid token format.");
+
+            const key = await this.getWebCryptoKey();
+
+            const signatureUint8 = this.base64UrlToUint8Array(signatureB64);
+            
+            const isValid = await crypto.subtle.verify(
+                'HMAC', 
+                key, 
+                signatureUint8 as any,
+                new TextEncoder().encode(payloadB64)
+            );
+
+            if (!isValid) throw new Error("Invalid Faucet Signature.");
+
+            const payload = JSON.parse(new TextDecoder().decode(this.base64UrlToUint8Array(payloadB64)));
+            if (payload.exp < Math.floor(Date.now() / 1000)) throw new Error("Faucet token has expired.");
 
             return { 
                 isValid: true, 
+                scheme: this.scheme,
                 payload: {
-                    agentId: "faucet-test-agent", 
-                    settledAmount: 10,   // ★ 超重要: Coreの「要求額10」を突破するために10 SATSと偽装します
-                    asset: 'SATS',       // ★ 超重要: SATSとして返さないとCoreの厳格チェックで弾かれます
+                    agentId: payload.agentId, 
+                    settledAmount: payload.amount, // 1
+                    asset: payload.asset,          // FAUCET_CREDIT
                     receiptId: `faucet-${Date.now()}`
                 }
             };

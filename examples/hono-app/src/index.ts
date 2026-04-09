@@ -27,8 +27,11 @@ app.post('/api/agent/omikuji', async (c) => {
     const l402Verifier = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
     const payment402 = new Payment402([faucetVerifier, l402Verifier]);
 
-    // ★ 修正：コアに対して「このリクエストは 10 SATS 必須だぞ！」と宣言して丸投げするだけ！
-    const authResult = await payment402.verify(c.req.raw, { amount: 10, asset: "SATS" });
+    // 本番用の 10 SATS か、テスト用の 1 FAUCET_CREDIT のどちらかを要求する！
+    const authResult = await payment402.verify(c.req.raw, [
+        { amount: 10, asset: "SATS" },
+        { amount: 1, asset: "FAUCET_CREDIT" } 
+    ]as any);
 
     // ★ 修正：アプリ側は isValid を信じるだけ。金額不足ならCoreが false にしてくれる。
     if (!authResult.isValid) {
