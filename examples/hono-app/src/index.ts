@@ -27,27 +27,28 @@ app.post('/api/agent/omikuji', async (c) => {
     const l402Verifier = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
     const payment402 = new Payment402([faucetVerifier, l402Verifier]);
 
-    // 本番用の 10 SATS か、テスト用の 1 FAUCET_CREDIT のどちらかを要求する！
-    const authResult = await payment402.verify(c.req.raw, [
+    const requirements = [
         { amount: 10, asset: "SATS" },
         { amount: 1, asset: "FAUCET_CREDIT" } 
-    ]as any);
+    ];
+
+    const authResult = await payment402.verify(c.req.raw, requirements as any);
 
     // ★ 修正：アプリ側は isValid を信じるだけ。金額不足ならCoreが false にしてくれる。
     if (!authResult.isValid) {
         console.log(`❌ 決済エラー: ${authResult.error}`); // Coreが生成した詳細なエラー理由が出力されます
         
-        const hateoas = payment402.buildHateoasResponse(10, "SATS");
+        const hateoas = payment402.buildHateoasResponse(requirements as any);
         c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>"');
         return c.json(hateoas, 402);
     }
 
     // 奉納（決済）成功時の処理！
     const results = [
-        "大吉！稲妻の如き速さでトランザクションが承認されるでしょう⚡", 
-        "中吉！ガス代が安定し、穏やかな巡礼の一日になります🕊️", 
-        "小吉！HODLあるのみ。徳を積むのに適した日です💎", 
-        "末吉！秘密鍵のバックアップを再確認せよ、という神仏の啓示です🔑"
+        "大吉。稲妻の如き速さでトランザクションが承認されるでしょう⚡", 
+        "中吉。ガス代が安定し、穏やかな巡礼の一日になります🕊️", 
+        "小吉。HODLあるのみ。徳を積むのに適した日です💎", 
+        "末吉。秘密鍵のバックアップを再確認せよ、という神仏の啓示です🔑"
     ];
     const fortune = results[Math.floor(Math.random() * results.length)];
 

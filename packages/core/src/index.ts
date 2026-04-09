@@ -79,12 +79,17 @@ export class Payment402 {
         return authResult;
     }
 
-    buildHateoasResponse(price: number, asset: string) {
+    buildHateoasResponse(requirements: PaymentRequirement | PaymentRequirement[]) {
+        const reqArray = Array.isArray(requirements) ? requirements : [requirements];
         const instructions = this.verifiers.map(v => v.getChallengeContext());
+        
+        // 「10 SATS または 1 FAUCET_CREDIT」のようなメッセージを自動生成
+        const messages = reqArray.map(req => `${req.amount} ${req.asset}`).join(" または ");
+
         return {
             error: "Payment Required",
-            message: `奉納額 ${price} ${asset} が必要です。`,
-            challenge: { amount: price, asset: asset },
+            message: `奉納額 ${messages} が必要です。`,
+            challenges: reqArray, 
             instruction_for_agents: instructions
         };
     }

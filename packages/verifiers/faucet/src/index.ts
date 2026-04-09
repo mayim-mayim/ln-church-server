@@ -105,7 +105,7 @@ export class FaucetVerifier implements PaymentVerifier {
                     agentId: payload.agentId, 
                     settledAmount: payload.amount, // 1
                     asset: payload.asset,          // FAUCET_CREDIT
-                    receiptId: `faucet-${Date.now()}`
+                    receiptId: `faucet-${signatureB64}`
                 }
             };
 

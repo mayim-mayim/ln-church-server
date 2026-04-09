@@ -283,6 +283,61 @@ main = "src/index.ts"
 }
 </file>
 
+<file path="packages/verifiers/l402/tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "types": ["node"],  
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"]
+}
+</file>
+
+<file path=".gitignore">
+# ========================
+# Node.js & npm
+# ========================
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ========================
+# Build outputs
+# ========================
+dist/
+**/dist/
+
+# ========================
+# Env files (Security)
+# ========================
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+
+# ========================
+# OS & Editor files
+# ========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ========================
+# Cloudflare Workers
+# ========================
+.wrangler/
+</file>
+
 <file path="packages/verifiers/faucet/src/index.ts">
 // packages/verifiers/faucet/src/index.ts
 
@@ -364,16 +419,33 @@ export class FaucetVerifier implements PaymentVerifier {
         }
 
         try {
-            // ==========================================
-            // ※必要に応じて既存のトークン検証（HMACなど）ロジックをここに復元
-            // ==========================================
+            // 🌟 封印されしHMAC検証ロジックを完全復活！
+            const [payloadB64, signatureB64] = token.split('.');
+            if (!payloadB64 || !signatureB64) throw new Error("Invalid token format.");
+
+            const key = await this.getWebCryptoKey();
+
+            const signatureUint8 = this.base64UrlToUint8Array(signatureB64);
+            
+            const isValid = await crypto.subtle.verify(
+                'HMAC', 
+                key, 
+                signatureUint8 as any,
+                new TextEncoder().encode(payloadB64)
+            );
+
+            if (!isValid) throw new Error("Invalid Faucet Signature.");
+
+            const payload = JSON.parse(new TextDecoder().decode(this.base64UrlToUint8Array(payloadB64)));
+            if (payload.exp < Math.floor(Date.now() / 1000)) throw new Error("Faucet token has expired.");
 
             return { 
                 isValid: true, 
+                scheme: this.scheme,
                 payload: {
-                    agentId: "faucet-test-agent", 
-                    settledAmount: 10,   // ★ 超重要: Coreの「要求額10」を突破するために10 SATSと偽装します
-                    asset: 'SATS',       // ★ 超重要: SATSとして返さないとCoreの厳格チェックで弾かれます
+                    agentId: payload.agentId, 
+                    settledAmount: payload.amount, // 1
+                    asset: payload.asset,          // FAUCET_CREDIT
                     receiptId: `faucet-${Date.now()}`
                 }
             };
@@ -403,138 +475,6 @@ export class FaucetVerifier implements PaymentVerifier {
 }
 </file>
 
-<file path="packages/verifiers/l402/tsconfig.json">
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "CommonJS",
-    "declaration": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "types": ["node"],  
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
-  },
-  "include": ["src/**/*"]
-}
-</file>
-
-<file path=".gitignore">
-# ========================
-# Node.js & npm
-# ========================
-node_modules/
-**/node_modules/
-npm-debug.log*
-yarn-error.log*
-
-# ========================
-# Build outputs
-# ========================
-dist/
-**/dist/
-
-# ========================
-# Env files (Security)
-# ========================
-.env
-.env.*
-.dev.vars
-.dev.vars.*
-
-# ========================
-# OS & Editor files
-# ========================
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-
-# ========================
-# Cloudflare Workers
-# ========================
-.wrangler/
-</file>
-
-<file path="packages/core/src/index.ts">
-// packages/core/src/index.ts
-
-export interface VerifyResult {
-    isValid: boolean;
-    scheme?: string;
-    amount?: number;
-    asset?: string;
-    payload?: {
-        agentId: string;
-        settledAmount: number;
-        asset: string;
-        receiptId: string;
-    };
-    error?: string;
-}
-
-export interface PaymentVerifier {
-    canHandle(req: any): boolean;
-    verify(req: any): Promise<VerifyResult>;
-    getChallengeContext(): Record<string, any>;
-}
-
-// 要求額の型を定義
-export interface PaymentRequirement {
-    amount: number;
-    asset: string;
-}
-
-export class Payment402 {
-    constructor(private verifiers: PaymentVerifier[]) {}
-
-    // 2. verifyメソッドに requirement パラメータを追加
-    public async verify(req: any, requirement?: PaymentRequirement): Promise<VerifyResult> {
-        // ※ここでは既存の verifier ループ処理があると仮定しています
-        let authResult: VerifyResult = { isValid: false, error: "No valid payment proof provided." };
-
-        for (const verifier of this.verifiers) {
-            if (verifier.canHandle(req)) {
-                authResult = await verifier.verify(req);
-                break; // 処理できるVerifierが見つかったら検証して抜ける
-            }
-        }
-
-        // 🛡️ 3. 新機能：コア側で金額とアセットを厳格に比較する
-        if (authResult.isValid && requirement) {
-            const settledAmount = authResult.payload?.settledAmount || 0;
-            const settledAsset = authResult.payload?.asset || "UNKNOWN";
-
-            if (settledAmount < requirement.amount || settledAsset !== requirement.asset) {
-                // 要求額を満たしていない場合は、心を鬼にして false に上書きする
-                return {
-                    isValid: false,
-                    error: `Payment insufficient or asset mismatch. Required: ${requirement.amount} ${requirement.asset}, Settled: ${settledAmount} ${settledAsset}`,
-                    payload: authResult.payload
-                };
-            }
-        }
-
-        return authResult;
-    }
-
-    // お金がない時に返す「完璧なHATEOAS（402エラー）」を生成する
-    buildHateoasResponse(price: number, asset: string) {
-        // 登録されている全プラグインからAI向けの指示書（カンペ）をかき集める
-        const instructions = this.verifiers.map(v => v.getChallengeContext());
-        
-        return {
-            error: "Payment Required",
-            message: `奉納額 ${price} ${asset} が必要です。`,
-            challenge: { amount: price, asset: asset },
-            instruction_for_agents: instructions
-        };
-    }
-}
-</file>
-
 <file path="examples/hono-app/package.json">
 {
   "name": "monzenmachi-hono-starter",
@@ -553,6 +493,99 @@ export class Payment402 {
   "devDependencies": {
     "wrangler": "^4.81.0"
   }
+}
+</file>
+
+<file path="packages/core/src/index.ts">
+export interface VerifyResult {
+    isValid: boolean;
+    scheme?: string;
+    payload?: {
+        agentId: string;
+        settledAmount: number;
+        asset: string;
+        receiptId: string;
+    };
+    error?: string;
+}
+
+export interface PaymentVerifier {
+    canHandle(req: any): boolean;
+    verify(req: any): Promise<VerifyResult>;
+    getChallengeContext(): Record<string, any>;
+}
+
+export interface PaymentRequirement {
+    amount: number;
+    asset: string;
+}
+
+// 🌟 GPT先生に指摘された「実体のない設計」を本物の実装へ！
+export interface ReceiptStore {
+    checkAndStore(receiptId: string): Promise<boolean>;
+}
+
+export class Payment402 {
+    private receiptStore?: ReceiptStore;
+
+    // オプションで ReceiptStore を受け取れるように変更
+    constructor(private verifiers: PaymentVerifier[], options?: { receiptStore?: ReceiptStore }) {
+        this.receiptStore = options?.receiptStore;
+    }
+
+    // 🌟 Requirement を配列（複数決済手段のOR条件）で受け取れるように進化！
+    public async verify(req: any, requirements?: PaymentRequirement | PaymentRequirement[]): Promise<VerifyResult> {
+        let authResult: VerifyResult = { isValid: false, error: "No valid payment proof provided." };
+
+        for (const verifier of this.verifiers) {
+            if (verifier.canHandle(req)) {
+                authResult = await verifier.verify(req);
+                break;
+            }
+        }
+
+        if (!authResult.isValid) return authResult;
+
+        // 🛡️ リプレイ攻撃防御
+        if (this.receiptStore && authResult.payload?.receiptId) {
+            const isUnique = await this.receiptStore.checkAndStore(authResult.payload.receiptId);
+            if (!isUnique) {
+                return { isValid: false, error: "Payment receipt has already been used (Replay detected)." };
+            }
+        }
+
+        // 🛡️ マルチアセット対応の厳格な価格検証
+        if (requirements) {
+            // 単一オブジェクトでも配列に変換して一括処理
+            const reqArray = Array.isArray(requirements) ? requirements : [requirements];
+            const settledAmount = authResult.payload?.settledAmount || 0;
+            const settledAsset = authResult.payload?.asset || "UNKNOWN";
+
+            // ★ 提示された要求の「どれか一つ」でも満たしていれば isMet = true になる！
+            const isMet = reqArray.some(req => settledAmount >= req.amount && settledAsset === req.asset);
+
+            if (!isMet) {
+                return {
+                    isValid: false,
+                    // エラーメッセージもundefinedが出ないように修正
+                    error: `Payment insufficient or asset mismatch. Settled: ${settledAmount} ${settledAsset}`,
+                    payload: authResult.payload
+                };
+            }
+        }
+
+        return authResult;
+    }
+
+    buildHateoasResponse(price: number, asset: string) {
+        const instructions = this.verifiers.map(v => v.getChallengeContext());
+        return {
+            error: "Payment Required",
+            message: `奉納額 ${price} ${asset} が必要です。`,
+            challenge: { amount: price, asset: asset },
+            instruction_for_agents: instructions
+        };
+    }
 }
 </file>
 
@@ -753,8 +786,11 @@ app.post('/api/agent/omikuji', async (c) => {
     const l402Verifier = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
     const payment402 = new Payment402([faucetVerifier, l402Verifier]);
 
-    // ★ 修正：コアに対して「このリクエストは 10 SATS 必須だぞ！」と宣言して丸投げするだけ！
-    const authResult = await payment402.verify(c.req.raw, { amount: 10, asset: "SATS" });
+    // 本番用の 10 SATS か、テスト用の 1 FAUCET_CREDIT のどちらかを要求する！
+    const authResult = await payment402.verify(c.req.raw, [
+        { amount: 10, asset: "SATS" },
+        { amount: 1, asset: "FAUCET_CREDIT" } 
+    ]as any);
 
     // ★ 修正：アプリ側は isValid を信じるだけ。金額不足ならCoreが false にしてくれる。
     if (!authResult.isValid) {
