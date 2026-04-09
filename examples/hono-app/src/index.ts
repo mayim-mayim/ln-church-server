@@ -23,17 +23,17 @@ app.get('/', (c) => {
 // ⛩️ おみくじAPI (有料エンドポイント)
 // ==========================================
 app.post('/api/agent/omikuji', async (c) => {
-    // 🛡️ 2. リクエストごとに、安全な環境変数(c.env)を使ってエンジンを初期化
     const faucetVerifier = new FaucetVerifier({ secret: c.env.FAUCET_SECRET });
     const l402Verifier = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
     const payment402 = new Payment402([faucetVerifier, l402Verifier]);
 
-    const authResult = await payment402.verify(c.req.raw);
-    const settledAmount = authResult.payload?.settledAmount || 0;
+    // ★ 修正：コアに対して「このリクエストは 10 SATS 必須だぞ！」と宣言して丸投げするだけ！
+    const authResult = await payment402.verify(c.req.raw, { amount: 10, asset: "SATS" });
 
-    // 証明書が偽造されているか、または「金額が足りない」場合は弾く
-    if (!authResult.isValid || settledAmount < 10) {
-        console.log(`❌ 決済エラー: 要求10 SATSに対し、${settledAmount} SATSの支払いでした。`);
+    // ★ 修正：アプリ側は isValid を信じるだけ。金額不足ならCoreが false にしてくれる。
+    if (!authResult.isValid) {
+        console.log(`❌ 決済エラー: ${authResult.error}`); // Coreが生成した詳細なエラー理由が出力されます
+        
         const hateoas = payment402.buildHateoasResponse(10, "SATS");
         c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>"');
         return c.json(hateoas, 402);

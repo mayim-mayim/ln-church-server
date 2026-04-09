@@ -15,32 +15,48 @@ export interface VerifyResult {
 }
 
 export interface PaymentVerifier {
-    canHandle(req: Request, body: any): boolean;
-    verify(req: Request, body: any): Promise<VerifyResult>;
+    canHandle(req: any): boolean;
+    verify(req: any): Promise<VerifyResult>;
     getChallengeContext(): Record<string, any>;
+}
+
+// 要求額の型を定義
+export interface PaymentRequirement {
+    amount: number;
+    asset: string;
 }
 
 export class Payment402 {
     constructor(private verifiers: PaymentVerifier[]) {}
 
-    // リクエストを解析し、適切なプラグインに検証を回す
-    async verify(req: Request): Promise<VerifyResult> {
-        try {
-            // HonoなどのRequestオブジェクトは一度しか読めないためcloneする
-            const clonedReq = req.clone();
-            const body = await clonedReq.json().catch(() => ({}));
+    // 2. verifyメソッドに requirement パラメータを追加
+    public async verify(req: any, requirement?: PaymentRequirement): Promise<VerifyResult> {
+        // ※ここでは既存の verifier ループ処理があると仮定しています
+        let authResult: VerifyResult = { isValid: false, error: "No valid payment proof provided." };
 
-            // 処理可能なプラグインを探す
-            const verifier = this.verifiers.find(v => v.canHandle(req, body));
-
-            if (verifier) {
-                return await verifier.verify(req, body); // 丸投げ！
+        for (const verifier of this.verifiers) {
+            if (verifier.canHandle(req)) {
+                authResult = await verifier.verify(req);
+                break; // 処理できるVerifierが見つかったら検証して抜ける
             }
-
-            return { isValid: false, error: "Payment Required or Unsupported Scheme" };
-        } catch (e: any) {
-            return { isValid: false, error: e.message };
         }
+
+        // 🛡️ 3. 新機能：コア側で金額とアセットを厳格に比較する
+        if (authResult.isValid && requirement) {
+            const settledAmount = authResult.payload?.settledAmount || 0;
+            const settledAsset = authResult.payload?.asset || "UNKNOWN";
+
+            if (settledAmount < requirement.amount || settledAsset !== requirement.asset) {
+                // 要求額を満たしていない場合は、心を鬼にして false に上書きする
+                return {
+                    isValid: false,
+                    error: `Payment insufficient or asset mismatch. Required: ${requirement.amount} ${requirement.asset}, Settled: ${settledAmount} ${settledAsset}`,
+                    payload: authResult.payload
+                };
+            }
+        }
+
+        return authResult;
     }
 
     // お金がない時に返す「完璧なHATEOAS（402エラー）」を生成する

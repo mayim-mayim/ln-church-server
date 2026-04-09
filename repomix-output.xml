@@ -498,6 +498,27 @@ Thumbs.db
 .wrangler/
 </file>
 
+<file path="examples/hono-app/package.json">
+{
+  "name": "monzenmachi-hono-starter",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@ln-church/server": "*",
+    "@ln-church/verifier-faucet": "*",
+    "@ln-church/verifier-l402": "*",
+    "hono": "^4.0.0",
+    "macaroons.js": "^0.3.9"
+  },
+  "devDependencies": {
+    "wrangler": "^4.81.0"
+  }
+}
+</file>
+
 <file path="packages/verifiers/l402/src/index.ts">
 import { PaymentVerifier, VerifyResult } from '@ln-church/server';
 import crypto from 'node:crypto';
@@ -580,25 +601,26 @@ export class L402Verifier implements PaymentVerifier {
                 return { isValid: false, error: "Macaroon signature invalid." };
             }
 
-            // ★ 修正箇所：マカロンの条件（Caveats）から決済額をステートレスに抽出！
-            let settledAmount = 0;
-            const inspectStr = macaroonObj.inspect(); // マカロンの全条件を文字列で取得
-            const amountMatch = inspectStr.match(/amount=(\d+)/);
+            // 正規表現をやめ、マカロンのCaveat（条件）から正確に抽出
+            let settledAmount = null;
+            
+            // macaroons.jsの内部構造からcaveatの識別子（cid）を取得
+            const caveats = macaroonObj.exportJSON().c || []; 
+            for (const caveat of caveats) {
+                if (caveat.cid && caveat.cid.startsWith('amount=')) {
+                    settledAmount = parseInt(caveat.cid.split('=')[1], 10);
+                }
+            }
 
-            if (amountMatch) {
-                // マカロンに "amount=10" などの条件が刻まれていればそれを採用
-                settledAmount = parseInt(amountMatch[1], 10);
-            } else {
-                // 本番環境ではここでエラー（isValid: false）にすべきですが、
-                // 今回はスターターキットの互換性維持のためフォールバック値を設定
-                settledAmount = 10; 
+            if (settledAmount === null) {
+                return { isValid: false, error: "Missing 'amount' caveat in Macaroon. Cannot verify payment amount." };
             }
 
             return { 
                 isValid: true, 
                 payload: {
                     agentId: "l402-autonomous-agent", 
-                    settledAmount: settledAmount, // ★ ハードコードを撃破！
+                    settledAmount: settledAmount, // 抽出された金額が入る
                     asset: 'SATS',
                     receiptId: calculatedHash
                 }
@@ -609,27 +631,6 @@ export class L402Verifier implements PaymentVerifier {
         }
     }
 
-}
-</file>
-
-<file path="examples/hono-app/package.json">
-{
-  "name": "monzenmachi-hono-starter",
-  "private": true,
-  "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
-  },
-  "dependencies": {
-    "@ln-church/server": "*",
-    "@ln-church/verifier-faucet": "*",
-    "@ln-church/verifier-l402": "*",
-    "hono": "^4.0.0",
-    "macaroons.js": "^0.3.9"
-  },
-  "devDependencies": {
-    "wrangler": "^4.81.0"
-  }
 }
 </file>
 
@@ -679,6 +680,9 @@ curl -X POST http://localhost:8787/api/agent/omikuji
 
 サーバーは賢く `402 Payment Required` を返し、**「Faucetでテストトークンをもらうか、L402で 10 SATS 払いなさい」** という機械読解可能な指示（HATEOAS）を出力するはずです。
 
+
+### セキュリティモデルに関する注記（リプレイ耐性について）
+本ミドルウェアは、エッジ環境での「完全ステートレス」を優先しているため、検証機単体ではリプレイ攻撃（同じマカロンの再送信）を防ぎません。本番環境で厳密な一回性を保証する場合は、Cloudflare KV 等を利用して receiptId (payment_hash) の使用済みチェックをアプリケーション層で行うか、上流の LND ノードでインボイスのステータスを確認するアーキテクチャを併用してください。
 ---
 </file>
 
@@ -714,14 +718,13 @@ app.post('/api/agent/omikuji', async (c) => {
     const payment402 = new Payment402([faucetVerifier, l402Verifier]);
 
     const authResult = await payment402.verify(c.req.raw);
+    const settledAmount = authResult.payload?.settledAmount || 0;
 
-    if (!authResult.isValid) {
+    // 証明書が偽造されているか、または「金額が足りない」場合は弾く
+    if (!authResult.isValid || settledAmount < 10) {
+        console.log(`❌ 決済エラー: 要求10 SATSに対し、${settledAmount} SATSの支払いでした。`);
         const hateoas = payment402.buildHateoasResponse(10, "SATS");
-        
-        // ※本来はここで生成したMacaroonとInvoiceを渡しますが、今回はエージェント向けの
-        // HATEOAS設計（自律取得）を優先しているため、プロトコル宣言として付与します。
         c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>"');
-        
         return c.json(hateoas, 402);
     }
 
