@@ -1,0 +1,755 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.gitignore
+examples/hono-app/package.json
+examples/hono-app/src/index.ts
+examples/hono-app/tsconfig.json
+examples/hono-app/wrangler.toml
+package.json
+packages/core/package.json
+packages/core/src/hateoas.ts
+packages/core/src/index.ts
+packages/core/tsconfig.json
+packages/verifiers/faucet/package.json
+packages/verifiers/faucet/src/index.js
+packages/verifiers/faucet/src/index.ts
+packages/verifiers/faucet/tsconfig.json
+packages/verifiers/l402/package.json
+packages/verifiers/l402/src/index.ts
+packages/verifiers/l402/tsconfig.json
+README.md
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="examples/hono-app/tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "ln-church-monzenmachi",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "packages/verifiers/*",
+    "examples/*"
+  ],
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "typescript": "^6.0.2"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present"
+  }
+}
+</file>
+
+<file path="packages/core/package.json">
+{
+  "name": "@ln-church/server",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
+</file>
+
+<file path="packages/core/src/hateoas.ts">
+
+</file>
+
+<file path="packages/core/tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./src",      // ★これを追加！
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"]
+}
+</file>
+
+<file path="packages/verifiers/faucet/src/index.js">
+// packages/verifiers/faucet/src/index.ts
+export class FaucetVerifier {
+    secretKey;
+    constructor(config) {
+        this.secretKey = config.secret;
+    }
+    // 自分が処理すべきリクエストか判定
+    canHandle(req, body) {
+        return body?.paymentOverride?.type === 'faucet' || body?.scheme === 'faucet';
+    }
+    // JWS（トークン）の生成ヘルパー（Faucetエンドポイントで使う用）
+    async generateGrantToken(agentId) {
+        const payload = {
+            agentId,
+            type: "faucet_grant",
+            asset: "FAUCET_CREDIT",
+            amount: 1,
+            exp: Math.floor(Date.now() / 1000) + 3600 // 1時間有効
+        };
+        const payloadB64 = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+        const key = await this.getWebCryptoKey();
+        const signatureBytes = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64));
+        const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signatureBytes))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+        return `${payloadB64}.${signatureB64}`;
+    }
+    // 署名の検証ロジック (Web Crypto API)
+    async verify(req, body) {
+        try {
+            const token = body?.paymentOverride?.proof || body?.paymentAuth?.proof;
+            if (!token)
+                throw new Error("Faucet proof is missing.");
+            const [payloadB64, signatureB64] = token.split('.');
+            if (!payloadB64 || !signatureB64)
+                throw new Error("Invalid token format.");
+            const key = await this.getWebCryptoKey();
+            const isValid = await crypto.subtle.verify('HMAC', key, this.base64UrlToUint8Array(signatureB64).buffer, // .buffer を追加
+            new TextEncoder().encode(payloadB64));
+            if (!isValid)
+                throw new Error("Invalid Faucet Signature.");
+            const payload = JSON.parse(new TextDecoder().decode(this.base64UrlToUint8Array(payloadB64)));
+            if (payload.exp < Math.floor(Date.now() / 1000))
+                throw new Error("Faucet token has expired.");
+            return {
+                isValid: true,
+                scheme: 'faucet',
+                payload: {
+                    agentId: payload.agentId,
+                    settledAmount: payload.amount,
+                    asset: payload.asset,
+                    receiptId: `faucet_tx_${Date.now()}`
+                }
+            };
+        }
+        catch (err) {
+            return { isValid: false, error: err.message };
+        }
+    }
+    // AIへ返すHATEOASカンペ
+    getChallengeContext() {
+        return {
+            scheme: "faucet",
+            guide: "Faucet override token required.",
+            next_request_schema: {
+                paymentOverride: { type: "faucet", proof: "<grant_token>", asset: "FAUCET_CREDIT" }
+            }
+        };
+    }
+    // 内部ヘルパー群
+    async getWebCryptoKey() {
+        return await crypto.subtle.importKey('raw', new TextEncoder().encode(this.secretKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+    }
+    base64UrlToUint8Array(base64Url) {
+        const padding = '='.repeat((4 - base64Url.length % 4) % 4);
+        const base64 = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = atob(base64);
+        return new Uint8Array([...rawData].map(char => char.charCodeAt(0)));
+    }
+}
+</file>
+
+<file path="packages/verifiers/faucet/src/index.ts">
+// packages/verifiers/faucet/src/index.ts
+
+import type { PaymentVerifier, VerifyResult } from '@ln-church/server';
+
+export class FaucetVerifier implements PaymentVerifier {
+    private secretKey: string;
+
+    constructor(config: { secret: string }) {
+        this.secretKey = config.secret;
+    }
+
+    // 自分が処理すべきリクエストか判定
+    canHandle(req: Request, body: any): boolean {
+        return body?.paymentOverride?.type === 'faucet' || body?.scheme === 'faucet';
+    }
+
+    // JWS（トークン）の生成ヘルパー（Faucetエンドポイントで使う用）
+    async generateGrantToken(agentId: string): Promise<string> {
+        const payload = {
+            agentId,
+            type: "faucet_grant",
+            asset: "FAUCET_CREDIT",
+            amount: 1,
+            exp: Math.floor(Date.now() / 1000) + 3600 // 1時間有効
+        };
+        const payloadB64 = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+        
+        const key = await this.getWebCryptoKey();
+        const signatureBytes = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64));
+        const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signatureBytes))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+        
+        return `${payloadB64}.${signatureB64}`;
+    }
+
+    // 署名の検証ロジック (Web Crypto API)
+    async verify(req: Request, body: any): Promise<VerifyResult> {
+        try {
+            const token = body?.paymentOverride?.proof || body?.paymentAuth?.proof;
+            if (!token) throw new Error("Faucet proof is missing.");
+
+            const [payloadB64, signatureB64] = token.split('.');
+            if (!payloadB64 || !signatureB64) throw new Error("Invalid token format.");
+
+            const key = await this.getWebCryptoKey();
+            const isValid = await crypto.subtle.verify(
+                'HMAC',
+                key,
+                this.base64UrlToUint8Array(signatureB64).buffer as ArrayBuffer,
+                new TextEncoder().encode(payloadB64)
+            );
+            if (!isValid) throw new Error("Invalid Faucet Signature.");
+
+            const payload = JSON.parse(new TextDecoder().decode(this.base64UrlToUint8Array(payloadB64)));
+            if (payload.exp < Math.floor(Date.now() / 1000)) throw new Error("Faucet token has expired.");
+
+            return {
+                isValid: true,
+                scheme: 'faucet',
+                payload: {
+                    agentId: payload.agentId,
+                    settledAmount: payload.amount,
+                    asset: payload.asset,
+                    receiptId: `faucet_tx_${Date.now()}`
+                }
+            };
+        } catch (err: any) {
+            return { isValid: false, error: err.message };
+        }
+    }
+
+    // AIへ返すHATEOASカンペ
+    getChallengeContext() {
+        return {
+            scheme: "faucet",
+            guide: "Faucet override token required.",
+            next_request_schema: {
+                paymentOverride: { type: "faucet", proof: "<grant_token>", asset: "FAUCET_CREDIT" }
+            }
+        };
+    }
+
+    // 内部ヘルパー群
+    private async getWebCryptoKey() {
+        return await crypto.subtle.importKey(
+            'raw',
+            new TextEncoder().encode(this.secretKey),
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign', 'verify']
+        );
+    }
+
+    private base64UrlToUint8Array(base64Url: string): Uint8Array {
+        const padding = '='.repeat((4 - base64Url.length % 4) % 4);
+        const base64 = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = atob(base64);
+        return new Uint8Array([...rawData].map(char => char.charCodeAt(0)));
+    }
+}
+</file>
+
+<file path="packages/verifiers/faucet/tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "WebWorker"]  // ★ これを追加！
+  },
+  "include": ["src/**/*"]
+}
+</file>
+
+<file path="packages/verifiers/l402/package.json">
+{
+  "name": "@ln-church/verifier-l402",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@ln-church/server": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
+</file>
+
+<file path="examples/hono-app/wrangler.toml">
+name = "ln-church-monzenmachi-api"
+compatibility_date = "2024-09-23"
+compatibility_flags = [ "nodejs_compat" ]
+main = "src/index.ts"
+
+# 本番環境へのデプロイ時は、以下のコマンドでシークレットを安全に登録します：
+# npx wrangler secret put MACAROON_SECRET
+</file>
+
+<file path="packages/core/src/index.ts">
+// packages/core/src/index.ts
+
+export interface VerifyResult {
+    isValid: boolean;
+    scheme?: string;
+    amount?: number;
+    asset?: string;
+    payload?: {
+        agentId: string;
+        settledAmount: number;
+        asset: string;
+        receiptId: string;
+    };
+    error?: string;
+}
+
+export interface PaymentVerifier {
+    canHandle(req: Request, body: any): boolean;
+    verify(req: Request, body: any): Promise<VerifyResult>;
+    getChallengeContext(): Record<string, any>;
+}
+
+export class Payment402 {
+    constructor(private verifiers: PaymentVerifier[]) {}
+
+    // リクエストを解析し、適切なプラグインに検証を回す
+    async verify(req: Request): Promise<VerifyResult> {
+        try {
+            // HonoなどのRequestオブジェクトは一度しか読めないためcloneする
+            const clonedReq = req.clone();
+            const body = await clonedReq.json().catch(() => ({}));
+
+            // 処理可能なプラグインを探す
+            const verifier = this.verifiers.find(v => v.canHandle(req, body));
+
+            if (verifier) {
+                return await verifier.verify(req, body); // 丸投げ！
+            }
+
+            return { isValid: false, error: "Payment Required or Unsupported Scheme" };
+        } catch (e: any) {
+            return { isValid: false, error: e.message };
+        }
+    }
+
+    // お金がない時に返す「完璧なHATEOAS（402エラー）」を生成する
+    buildHateoasResponse(price: number, asset: string) {
+        // 登録されている全プラグインからAI向けの指示書（カンペ）をかき集める
+        const instructions = this.verifiers.map(v => v.getChallengeContext());
+        
+        return {
+            error: "Payment Required",
+            message: `奉納額 ${price} ${asset} が必要です。`,
+            challenge: { amount: price, asset: asset },
+            instruction_for_agents: instructions
+        };
+    }
+}
+</file>
+
+<file path="packages/verifiers/faucet/package.json">
+{
+  "name": "@ln-church/verifier-faucet",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@ln-church/server": "*"
+  }
+}
+</file>
+
+<file path="packages/verifiers/l402/src/index.ts">
+import { PaymentVerifier, VerifyResult } from '@ln-church/server';
+import crypto from 'node:crypto';
+const { MacaroonsBuilder, MacaroonsVerifier } = require('macaroons.js');
+
+export interface L402Config {
+    macaroonSecret?: string;
+    nodeUrl?: string;
+}
+
+export class L402Verifier implements PaymentVerifier {
+    public readonly scheme = 'l402';
+
+    constructor(private config: L402Config = {}) {}
+
+    // ==========================================
+    // 🛡️ 新機能：HTTPリクエストからL402の証明を抽出するヘルパー
+    // ==========================================
+    private extractProof(req: any): { macaroon: string, preimage: string } | null {
+        if (!req || !req.headers) return null;
+        
+        // Fetch API (Cloudflare/Hono) と Node.js の両方のヘッダー形式に対応
+        const authHeader = typeof req.headers.get === 'function' 
+            ? req.headers.get('Authorization') 
+            : req.headers['authorization'] || req.headers['Authorization'];
+
+        if (!authHeader) return null;
+
+        // "L402 <macaroon>:<preimage>" の形式を分解
+        const parts = authHeader.split(' ');
+        if (parts.length !== 2 || parts[0].toUpperCase() !== 'L402') return null;
+
+        const credentials = parts[1].split(':');
+        if (credentials.length !== 2) return null;
+
+        return { macaroon: credentials[0], preimage: credentials[1] };
+    }
+
+    // 1. リクエストヘッダーを見て、L402の処理対象か判定
+    public canHandle(req: any): boolean {
+        return this.extractProof(req) !== null;
+    }
+
+    // 2. AIエージェントに「L402で支払え」という指示とスキーマを出す
+    public getChallengeContext(): Record<string, any> {
+        return {
+            guide: "L402 payment required. Fetch an invoice, pay it via Lightning Network, and set the Authorization header.",
+            next_request_instruction: {
+                headers: {
+                    Authorization: "L402 <BASE64_MACAROON_STRING>:<HEX_PREIMAGE_STRING>"
+                }
+            }
+        };
+    }
+
+    // 3. HTTPリクエストのヘッダーから証拠を抽出して検証する！
+    public async verify(req: any): Promise<VerifyResult> {
+        const proof = this.extractProof(req);
+
+        if (!proof) {
+            // エラーメッセージもヘッダーを見ることを明示
+            return { isValid: false, error: "Missing or invalid L402 Authorization header. Format: 'L402 <macaroon>:<preimage>'" };
+        }
+
+        const { macaroon, preimage } = proof;
+
+        try {
+            const calculatedHash = crypto.createHash('sha256')
+                .update(Buffer.from(preimage, 'hex'))
+                .digest('hex');
+
+            const verifier = new MacaroonsVerifier(MacaroonsBuilder.deserialize(macaroon));
+            verifier.satisfyExact(`payment_hash=${calculatedHash}`);
+
+            const secret = this.config.macaroonSecret || "";
+            const isValid = verifier.isValid(secret);
+
+            if (!isValid) {
+                return { isValid: false, error: "Macaroon signature invalid." };
+            }
+
+            // 本来はマカロンのcaveat（条件）から抽出しますが、
+            // 今回はステートレス設計のため、検証を通過した＝要求額を満たしたとみなします。
+            return { 
+                isValid: true, 
+                payload: {
+                    agentId: "l402-autonomous-agent", // AIエージェントとしてラベリング
+                    settledAmount: 10,                // 0 SATS問題を解消！（※暫定ハードコード）
+                    asset: 'SATS',
+                    receiptId: calculatedHash
+                }
+            };
+
+        } catch (e: any) {
+            return { isValid: false, error: `L402 Verification failed: ${e.message}` };
+        }
+    }
+}
+</file>
+
+<file path="packages/verifiers/l402/tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "types": ["node"],  
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"]
+}
+</file>
+
+<file path=".gitignore">
+# ========================
+# Node.js & npm
+# ========================
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ========================
+# Build outputs
+# ========================
+dist/
+**/dist/
+
+# ========================
+# Env files (Security)
+# ========================
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+
+# ========================
+# OS & Editor files
+# ========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ========================
+# Cloudflare Workers
+# ========================
+.wrangler/
+</file>
+
+<file path="examples/hono-app/package.json">
+{
+  "name": "monzenmachi-hono-starter",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@ln-church/server": "*",
+    "@ln-church/verifier-faucet": "*",
+    "@ln-church/verifier-l402": "*",
+    "hono": "^4.0.0",
+    "macaroons.js": "^0.3.9"
+  },
+  "devDependencies": {
+    "wrangler": "^4.81.0"
+  }
+}
+</file>
+
+<file path="examples/hono-app/src/index.ts">
+import { Hono } from 'hono';
+import { Payment402 } from '@ln-church/server';
+import { FaucetVerifier } from '@ln-church/verifier-faucet';
+import { L402Verifier } from '@ln-church/verifier-l402';
+
+// ==========================================
+// 🛡️ 1. 環境変数の「型」を厳格に定義する
+// ==========================================
+type Bindings = {
+    FAUCET_SECRET: string;
+    MACAROON_SECRET: string;
+};
+
+// Honoに環境変数の型を教え込む（これで c.env.xxx で安全に補完が効きます）
+const app = new Hono<{ Bindings: Bindings }>();
+
+app.get('/', (c) => {
+    return c.text('⛩️ Welcome to Monzenmachi ⛩️\nAI Agents: Send a POST request to /api/agent/omikuji');
+});
+
+
+// ==========================================
+// ⛩️ おみくじAPI (有料エンドポイント)
+// ==========================================
+app.post('/api/agent/omikuji', async (c) => {
+    // 🛡️ 2. リクエストごとに、安全な環境変数(c.env)を使ってエンジンを初期化
+    const faucetVerifier = new FaucetVerifier({ secret: c.env.FAUCET_SECRET });
+    const l402Verifier = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
+    const payment402 = new Payment402([faucetVerifier, l402Verifier]);
+
+    const authResult = await payment402.verify(c.req.raw);
+
+    if (!authResult.isValid) {
+        const hateoas = payment402.buildHateoasResponse(10, "SATS");
+        return c.json(hateoas, 402);
+    }
+
+    // 奉納（決済）成功時の処理！
+    const results = [
+        "大吉！稲妻の如き速さでトランザクションが承認されるでしょう⚡", 
+        "中吉！ガス代が安定し、穏やかな巡礼の一日になります🕊️", 
+        "小吉！HODLあるのみ。徳を積むのに適した日です💎", 
+        "末吉！秘密鍵のバックアップを再確認せよ、という神仏の啓示です🔑"
+    ];
+    const fortune = results[Math.floor(Math.random() * results.length)];
+
+    return c.json({
+        status: "success",
+        message: "奉納ありがとうございます。あなたの運勢は...",
+        result: fortune,
+        paid: `${authResult.payload?.settledAmount || 0} ${authResult.payload?.asset || 'UNKNOWN'}`
+    });
+});
+
+// ==========================================
+// 💧 Faucet API (開発・テスト用の資金調達エンドポイント)
+// ==========================================
+app.post('/api/agent/faucet', async (c) => {
+    // 🛡️ Faucet単体の呼び出し時も、同様に c.env から安全に初期化
+    const faucetVerifier = new FaucetVerifier({ secret: c.env.FAUCET_SECRET });
+
+    const body = await c.req.json().catch(() => ({}));
+    const agentId = body.agentId || "Anonymous_Agent";
+
+    const grantToken = await faucetVerifier.generateGrantToken(agentId);
+
+    return c.json({
+        status: "success",
+        message: "Initialization funds granted. (Test Token)",
+        grant_token: grantToken,
+        next_action: {
+            instruction_for_agent: "Omikujiへ戻り、このトークンを使いなさい",
+            method: "POST",
+            url: "/api/agent/omikuji"
+        }
+    });
+});
+
+
+// Cloudflare Workers 等のエッジ環境向けの Export
+export default app;
+</file>
+
+<file path="README.md">
+# ⛩️ Monzenmachi Hono Starter Kit
+
+> AIエージェントのための「門前町（自律決済ゲートウェイ）」を、Cloudflare Workers 上に5分で構築するための最強のスターターキットです。
+
+このプロジェクトは、AIエージェント向けの決済ミドルウェア [`@ln-church/server`](https://github.com/mayim-mayim/ln-church-server) を使用し、Hono フレームワーク上で動作します。L402 (Lightning Network) と Faucet (テスト用蛇口) の両方に対応した「おみくじAPI」が最初から組み込まれています。
+
+## 🚀 5分でできるクイックスタート
+
+### 1. インストール
+リポジトリをクローン（またはこのフォルダをコピー）し、依存関係をインストールします。
+
+```bash
+cd examples/hono-app
+npm install
+```
+
+### 2. 環境変数（シークレット）の設定
+ローカル開発用に、秘密鍵を設定します。
+プロジェクトのルート（`examples/hono-app/` 直下）に **`.dev.vars`** というファイルを作成し、以下の内容を記述してください。
+
+```text
+# .dev.vars
+FAUCET_SECRET="your-local-test-faucet-secret"
+MACAROON_SECRET="your-local-test-macaroon-secret"
+```
+> **🚨 警告:** `.dev.vars` は絶対に Git にコミットしないでください！
+
+### 3. ローカルサーバーの起動
+Wrangler (CloudflareのCLIツール) を使って、ローカル環境でエッジサーバーを立ち上げます。
+
+```bash
+npm run dev
+```
+`Ready on http://127.0.0.1:8787` と表示されれば準備完了です！
+
+### 4. エージェントの気分でテスト（祈祷）
+別のターミナルを開き、AIエージェントの代わりにおみくじAPIを叩いてみましょう。
+
+```bash
+# 罰当たり（支払いなし）でアクセスしてみる
+curl -X POST http://localhost:8787/api/agent/omikuji
+```
+
+サーバーは賢く `402 Payment Required` を返し、**「Faucetでテストトークンをもらうか、L402で 10 SATS 払いなさい」** という機械読解可能な指示（HATEOAS）を出力するはずです。
+
+---
+</file>
+
+</files>

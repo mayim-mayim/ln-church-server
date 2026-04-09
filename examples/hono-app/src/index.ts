@@ -32,6 +32,11 @@ app.post('/api/agent/omikuji', async (c) => {
 
     if (!authResult.isValid) {
         const hateoas = payment402.buildHateoasResponse(10, "SATS");
+        
+        // ※本来はここで生成したMacaroonとInvoiceを渡しますが、今回はエージェント向けの
+        // HATEOAS設計（自律取得）を優先しているため、プロトコル宣言として付与します。
+        c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>"');
+        
         return c.json(hateoas, 402);
     }
 
