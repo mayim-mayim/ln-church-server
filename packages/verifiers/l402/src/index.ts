@@ -1,9 +1,10 @@
-import { PaymentVerifier } from '@ln-church/server';
+import { PaymentVerifier, VerifyResult } from '@ln-church/server';
+import crypto from 'node:crypto';
+const { MacaroonsBuilder, MacaroonsVerifier } = require('macaroons.js');
 
 export interface L402Config {
-    // LNDのノードURLや、Macaroonの署名検証に使うシークレットなどが入る想定
-    nodeUrl?: string;
     macaroonSecret?: string;
+    nodeUrl?: string;
 }
 
 export class L402Verifier implements PaymentVerifier {
@@ -11,12 +12,35 @@ export class L402Verifier implements PaymentVerifier {
 
     constructor(private config: L402Config = {}) {}
 
-    // 1. このプラグインが処理できる証明（proof）かどうかを判定
-    public canHandle(proof: any): boolean {
-        return proof && typeof proof === 'object' && 'macaroon' in proof && 'preimage' in proof;
+    // ==========================================
+    // 🛡️ 新機能：HTTPリクエストからL402の証明を抽出するヘルパー
+    // ==========================================
+    private extractProof(req: any): { macaroon: string, preimage: string } | null {
+        if (!req || !req.headers) return null;
+        
+        // Fetch API (Cloudflare/Hono) と Node.js の両方のヘッダー形式に対応
+        const authHeader = typeof req.headers.get === 'function' 
+            ? req.headers.get('Authorization') 
+            : req.headers['authorization'] || req.headers['Authorization'];
+
+        if (!authHeader) return null;
+
+        // "L402 <macaroon>:<preimage>" の形式を分解
+        const parts = authHeader.split(' ');
+        if (parts.length !== 2 || parts[0].toUpperCase() !== 'L402') return null;
+
+        const credentials = parts[1].split(':');
+        if (credentials.length !== 2) return null;
+
+        return { macaroon: credentials[0], preimage: credentials[1] };
     }
 
-    // 2. AIエージェントに「L402で支払え」という指示とスキーマを出す（引数なしに修正！）
+    // 1. リクエストヘッダーを見て、L402の処理対象か判定
+    public canHandle(req: any): boolean {
+        return this.extractProof(req) !== null;
+    }
+
+    // 2. AIエージェントに「L402で支払え」という指示とスキーマを出す
     public getChallengeContext(): Record<string, any> {
         return {
             guide: "L402 payment required. Fetch an invoice, pay it via Lightning Network, and provide the Macaroon and Preimage.",
@@ -27,31 +51,45 @@ export class L402Verifier implements PaymentVerifier {
                         macaroon: "BASE64_MACAROON_STRING",
                         preimage: "HEX_PREIMAGE_STRING"
                     }
-                    // assetはcore側で処理されるはずなのでここからは削除
                 }
             }
         };
     }
 
-    // 3. 支払いの証明（Macaroon + Preimage）を検証する
-    public async verify(proof: any): Promise<{ isValid: boolean; amount?: number; asset?: string; error?: string }> {
-        if (!this.canHandle(proof)) {
-            return { isValid: false, error: "Invalid L402 proof format. Required: macaroon and preimage." };
+    // 3. HTTPリクエストのヘッダーから証拠を抽出して検証する！
+    public async verify(req: any): Promise<VerifyResult> {
+        const proof = this.extractProof(req);
+
+        if (!proof) {
+            return { isValid: false, error: "Missing or invalid L402 Authorization header. Format: 'L402 <macaroon>:<preimage>'" };
         }
 
         const { macaroon, preimage } = proof;
 
         try {
-            // ==========================================
-            // TODO: ここに本気のL402検証ロジックを書く！
-            // ==========================================
+            const calculatedHash = crypto.createHash('sha256')
+                .update(Buffer.from(preimage, 'hex'))
+                .digest('hex');
 
-            // 仮実装：preimageが32文字以上あればヨシとする
-            if (preimage.length >= 32) {
-                return { isValid: true, amount: 0, asset: 'SATS' }; 
-            } else {
-                 return { isValid: false, error: "Invalid preimage." };
+            const verifier = new MacaroonsVerifier(MacaroonsBuilder.deserialize(macaroon));
+            verifier.satisfyExact(`payment_hash=${calculatedHash}`);
+
+            const secret = this.config.macaroonSecret || "";
+            const isValid = verifier.isValid(secret);
+
+            if (!isValid) {
+                return { isValid: false, error: "Macaroon signature invalid." };
             }
+
+            return { 
+                isValid: true, 
+                payload: {
+                    agentId: "unknown", 
+                    settledAmount: 0, 
+                    asset: 'SATS',
+                    receiptId: calculatedHash
+                }
+            };
 
         } catch (e: any) {
             return { isValid: false, error: `L402 Verification failed: ${e.message}` };

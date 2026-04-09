@@ -17,6 +17,8 @@ dist/
 # ========================
 .env
 .env.*
+.dev.vars
+.dev.vars.*
 
 # ========================
 # OS & Editor files
@@ -25,3 +27,8 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# ========================
+# Cloudflare Workers
+# ========================
+.wrangler/

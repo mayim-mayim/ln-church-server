@@ -1,63 +1,46 @@
-# ⛩️ ln-church-server (Monzenmachi / 門前町)
+# ⛩️ Monzenmachi Hono Starter Kit
 
-> **The Gateway for the Agentic Web.** > Stop building paywalls for humans. Start building gateways for AI Agents.
+> AIエージェントのための「門前町（自律決済ゲートウェイ）」を、Cloudflare Workers 上に5分で構築するための最強のスターターキットです。
 
-`ln-church-server` は、あなたのAPIを **HTTP 402 Payment Required** に対応させ、AIエージェントが自律的に「資金調達 → 支払い → 実行」を行えるようにするための、プラグイン可能なミドルウェアSDKです。
+このプロジェクトは、AIエージェント向けの決済ミドルウェア [`@ln-church/server`](https://github.com/mayim-mayim/ln-church-server) を使用し、Hono フレームワーク上で動作します。L402 (Lightning Network) と Faucet (テスト用蛇口) の両方に対応した「おみくじAPI」が最初から組み込まれています。
 
+## 🚀 5分でできるクイックスタート
 
-
-## 🌟 Why Monzenmachi?
-
-既存の決済SDKは「人間が画面を見て操作すること」を前提としています。しかし、AIエージェントにはUIが見えません。彼らに必要なのは、エラーとともに返される **「次に何をすべきか」という機械読解可能な指示（HATEOAS）** です。
-
-本プロジェクトは、AIエージェント（[ln-church-agent](https://github.com/mayim-mayim/ln-church-agent)）とサーバーを、この「門前町（Monzenmachi）」という共通規格で繋ぎます。
-
-- **Agent-First**: AIエージェントに最適な HATEOAS レスポンスを自動生成。
-- **Edge-Ready**: Web Crypto API を採用し、Cloudflare Workers 等のエッジ環境で爆速動作。
-- **Multi-Scheme**: Faucet, L402, x402, Solanaなど、プラグイン形式で決済手段を自由に追加。
-
-## 📦 Installation
+### 1. インストール
+リポジトリをクローン（またはこのフォルダをコピー）し、依存関係をインストールします。
 
 ```bash
-npm install @ln-church/server @ln-church/verifier-faucet
+cd examples/hono-app
+npm install
 ```
 
-## 🚀 Quick Start (Hono Example)
+### 2. 環境変数（シークレット）の設定
+ローカル開発用に、秘密鍵を設定します。
+プロジェクトのルート（`examples/hono-app/` 直下）に **`.dev.vars`** というファイルを作成し、以下の内容を記述してください。
 
-わずか数行で、あなたのおみくじAPIを「奉納（決済）」対応にできます。
+```text
+# .dev.vars
+FAUCET_SECRET="your-local-test-faucet-secret"
+MACAROON_SECRET="your-local-test-macaroon-secret"
+```
+> **🚨 警告:** `.dev.vars` は絶対に Git にコミットしないでください！
 
-```typescript
-import { Hono } from 'hono';
-import { Payment402 } from '@ln-church/server';
-import { FaucetVerifier } from '@ln-church/verifier-faucet';
+### 3. ローカルサーバーの起動
+Wrangler (CloudflareのCLIツール) を使って、ローカル環境でエッジサーバーを立ち上げます。
 
-const app = new Hono();
+```bash
+npm run dev
+```
+`Ready on http://127.0.0.1:8787` と表示されれば準備完了です！
 
-// 1. 決済エンジンの初期化
-const payment402 = new Payment402([
-  new FaucetVerifier({ secret: "your-holy-secret" })
-]);
+### 4. エージェントの気分でテスト（祈祷）
+別のターミナルを開き、AIエージェントの代わりにおみくじAPIを叩いてみましょう。
 
-// 2. 有料エンドポイントの作成
-app.post('/api/omikuji', async (c) => {
-  const auth = await payment402.verify(c.req.raw);
-
-  if (!auth.isValid) {
-    // お金がないAIに、自動で「蛇口(Faucet)で資金調達しろ」という導線を返却
-    return c.json(payment402.buildHateoasResponse(0.01, "USDC"), 402);
-  }
-
-  return c.json({ result: "大吉！" });
-});
+```bash
+# 罰当たり（支払いなし）でアクセスしてみる
+curl -X POST http://localhost:8787/api/agent/omikuji
 ```
 
-## 🧩 Verifiers (Plugins)
-
-- `@ln-church/verifier-faucet`: テスト・デモ用のトークン検証（リリース済）
-- `@ln-church/verifier-l402`: Lightning Network 決済検証（Coming soon）
-- `@ln-church/verifier-evm`: Polygon/Base 等のオンチェーン決済検証（Coming soon）
+サーバーは賢く `402 Payment Required` を返し、**「Faucetでテストトークンをもらうか、L402で 10 SATS 払いなさい」** という機械読解可能な指示（HATEOAS）を出力するはずです。
 
 ---
-
-## License
-MIT
