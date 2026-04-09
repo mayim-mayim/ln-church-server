@@ -6,10 +6,11 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "hono": "^4.0.0",
     "@ln-church/server": "*",
     "@ln-church/verifier-faucet": "*",
-    "@ln-church/verifier-l402": "*"
+    "@ln-church/verifier-l402": "*",
+    "hono": "^4.0.0",
+    "macaroons.js": "^0.3.9"
   },
   "devDependencies": {
     "wrangler": "^3.0.0"

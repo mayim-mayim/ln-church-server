@@ -50,8 +50,7 @@ app.post('/api/agent/omikuji', async (c) => {
         status: "success",
         message: "奉納ありがとうございます。あなたの運勢は...",
         result: fortune,
-        // Faucetで払われたか、L402で払われたかがここで分かります
-        paid: `${authResult.amount || 0} ${authResult.asset || 'UNKNOWN'}`
+        paid: `${authResult.payload?.settledAmount || 0} ${authResult.payload?.asset || 'UNKNOWN'}`
     });
 
 });
