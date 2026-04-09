@@ -79,25 +79,26 @@ export class L402Verifier implements PaymentVerifier {
                 return { isValid: false, error: "Macaroon signature invalid." };
             }
 
-            // ★ 修正箇所：マカロンの条件（Caveats）から決済額をステートレスに抽出！
-            let settledAmount = 0;
-            const inspectStr = macaroonObj.inspect(); // マカロンの全条件を文字列で取得
-            const amountMatch = inspectStr.match(/amount=(\d+)/);
+            // 正規表現をやめ、マカロンのCaveat（条件）から正確に抽出
+            let settledAmount = null;
+            
+            // macaroons.jsの内部構造からcaveatの識別子（cid）を取得
+            const caveats = macaroonObj.exportJSON().c || []; 
+            for (const caveat of caveats) {
+                if (caveat.cid && caveat.cid.startsWith('amount=')) {
+                    settledAmount = parseInt(caveat.cid.split('=')[1], 10);
+                }
+            }
 
-            if (amountMatch) {
-                // マカロンに "amount=10" などの条件が刻まれていればそれを採用
-                settledAmount = parseInt(amountMatch[1], 10);
-            } else {
-                // 本番環境ではここでエラー（isValid: false）にすべきですが、
-                // 今回はスターターキットの互換性維持のためフォールバック値を設定
-                settledAmount = 10; 
+            if (settledAmount === null) {
+                return { isValid: false, error: "Missing 'amount' caveat in Macaroon. Cannot verify payment amount." };
             }
 
             return { 
                 isValid: true, 
                 payload: {
                     agentId: "l402-autonomous-agent", 
-                    settledAmount: settledAmount, // ★ ハードコードを撃破！
+                    settledAmount: settledAmount, // 抽出された金額が入る
                     asset: 'SATS',
                     receiptId: calculatedHash
                 }

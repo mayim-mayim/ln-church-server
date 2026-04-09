@@ -29,14 +29,13 @@ app.post('/api/agent/omikuji', async (c) => {
     const payment402 = new Payment402([faucetVerifier, l402Verifier]);
 
     const authResult = await payment402.verify(c.req.raw);
+    const settledAmount = authResult.payload?.settledAmount || 0;
 
-    if (!authResult.isValid) {
+    // 証明書が偽造されているか、または「金額が足りない」場合は弾く
+    if (!authResult.isValid || settledAmount < 10) {
+        console.log(`❌ 決済エラー: 要求10 SATSに対し、${settledAmount} SATSの支払いでした。`);
         const hateoas = payment402.buildHateoasResponse(10, "SATS");
-        
-        // ※本来はここで生成したMacaroonとInvoiceを渡しますが、今回はエージェント向けの
-        // HATEOAS設計（自律取得）を優先しているため、プロトコル宣言として付与します。
         c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>"');
-        
         return c.json(hateoas, 402);
     }
 
