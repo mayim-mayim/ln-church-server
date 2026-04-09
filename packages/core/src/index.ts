@@ -48,14 +48,6 @@ export class Payment402 {
 
         if (!authResult.isValid) return authResult;
 
-        // 🛡️ リプレイ攻撃防御
-        if (this.receiptStore && authResult.payload?.receiptId) {
-            const isUnique = await this.receiptStore.checkAndStore(authResult.payload.receiptId);
-            if (!isUnique) {
-                return { isValid: false, error: "Payment receipt has already been used (Replay detected)." };
-            }
-        }
-
         // 🛡️ マルチアセット対応の厳格な価格検証
         if (requirements) {
             // 単一オブジェクトでも配列に変換して一括処理
@@ -73,6 +65,14 @@ export class Payment402 {
                     error: `Payment insufficient or asset mismatch. Settled: ${settledAmount} ${settledAsset}`,
                     payload: authResult.payload
                 };
+            }
+        }
+
+        // 🛡️ リプレイ攻撃防御
+        if (this.receiptStore && authResult.payload?.receiptId) {
+            const isUnique = await this.receiptStore.checkAndStore(authResult.payload.receiptId);
+            if (!isUnique) {
+                return { isValid: false, error: "Payment receipt has already been used (Replay detected)." };
             }
         }
 

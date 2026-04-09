@@ -34,16 +34,17 @@ app.post('/api/agent/omikuji', async (c) => {
 
     const authResult = await payment402.verify(c.req.raw, requirements as any);
 
-    // ★ 修正：アプリ側は isValid を信じるだけ。金額不足ならCoreが false にしてくれる。
+    // アプリ側は isValid を信じるだけ。金額不足ならCoreが false にしてくれる。
     if (!authResult.isValid) {
         console.log(`❌ 決済エラー: ${authResult.error}`); // Coreが生成した詳細なエラー理由が出力されます
         
         const hateoas = payment402.buildHateoasResponse(requirements as any);
-        c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>"');
+        c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>", Faucet grant_token="<fetch-via-hateoas>"');
         return c.json(hateoas, 402);
+    
     }
 
-    // 奉納（決済）成功時の処理！
+    // 奉納（決済）成功時の処理
     const results = [
         "大吉。稲妻の如き速さでトランザクションが承認されるでしょう⚡", 
         "中吉。ガス代が安定し、穏やかな巡礼の一日になります🕊️", 

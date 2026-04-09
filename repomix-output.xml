@@ -338,6 +338,27 @@ Thumbs.db
 .wrangler/
 </file>
 
+<file path="examples/hono-app/package.json">
+{
+  "name": "monzenmachi-hono-starter",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@ln-church/server": "*",
+    "@ln-church/verifier-faucet": "*",
+    "@ln-church/verifier-l402": "*",
+    "hono": "^4.0.0",
+    "macaroons.js": "^0.3.9"
+  },
+  "devDependencies": {
+    "wrangler": "^4.81.0"
+  }
+}
+</file>
+
 <file path="packages/verifiers/faucet/src/index.ts">
 // packages/verifiers/faucet/src/index.ts
 
@@ -446,7 +467,7 @@ export class FaucetVerifier implements PaymentVerifier {
                     agentId: payload.agentId, 
                     settledAmount: payload.amount, // 1
                     asset: payload.asset,          // FAUCET_CREDIT
-                    receiptId: `faucet-${Date.now()}`
+                    receiptId: `faucet-${signatureB64}`
                 }
             };
 
@@ -471,120 +492,6 @@ export class FaucetVerifier implements PaymentVerifier {
         const base64 = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
         const rawData = atob(base64);
         return new Uint8Array([...rawData].map(char => char.charCodeAt(0)));
-    }
-}
-</file>
-
-<file path="examples/hono-app/package.json">
-{
-  "name": "monzenmachi-hono-starter",
-  "private": true,
-  "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
-  },
-  "dependencies": {
-    "@ln-church/server": "*",
-    "@ln-church/verifier-faucet": "*",
-    "@ln-church/verifier-l402": "*",
-    "hono": "^4.0.0",
-    "macaroons.js": "^0.3.9"
-  },
-  "devDependencies": {
-    "wrangler": "^4.81.0"
-  }
-}
-</file>
-
-<file path="packages/core/src/index.ts">
-export interface VerifyResult {
-    isValid: boolean;
-    scheme?: string;
-    payload?: {
-        agentId: string;
-        settledAmount: number;
-        asset: string;
-        receiptId: string;
-    };
-    error?: string;
-}
-
-export interface PaymentVerifier {
-    canHandle(req: any): boolean;
-    verify(req: any): Promise<VerifyResult>;
-    getChallengeContext(): Record<string, any>;
-}
-
-export interface PaymentRequirement {
-    amount: number;
-    asset: string;
-}
-
-// 🌟 GPT先生に指摘された「実体のない設計」を本物の実装へ！
-export interface ReceiptStore {
-    checkAndStore(receiptId: string): Promise<boolean>;
-}
-
-export class Payment402 {
-    private receiptStore?: ReceiptStore;
-
-    // オプションで ReceiptStore を受け取れるように変更
-    constructor(private verifiers: PaymentVerifier[], options?: { receiptStore?: ReceiptStore }) {
-        this.receiptStore = options?.receiptStore;
-    }
-
-    // 🌟 Requirement を配列（複数決済手段のOR条件）で受け取れるように進化！
-    public async verify(req: any, requirements?: PaymentRequirement | PaymentRequirement[]): Promise<VerifyResult> {
-        let authResult: VerifyResult = { isValid: false, error: "No valid payment proof provided." };
-
-        for (const verifier of this.verifiers) {
-            if (verifier.canHandle(req)) {
-                authResult = await verifier.verify(req);
-                break;
-            }
-        }
-
-        if (!authResult.isValid) return authResult;
-
-        // 🛡️ リプレイ攻撃防御
-        if (this.receiptStore && authResult.payload?.receiptId) {
-            const isUnique = await this.receiptStore.checkAndStore(authResult.payload.receiptId);
-            if (!isUnique) {
-                return { isValid: false, error: "Payment receipt has already been used (Replay detected)." };
-            }
-        }
-
-        // 🛡️ マルチアセット対応の厳格な価格検証
-        if (requirements) {
-            // 単一オブジェクトでも配列に変換して一括処理
-            const reqArray = Array.isArray(requirements) ? requirements : [requirements];
-            const settledAmount = authResult.payload?.settledAmount || 0;
-            const settledAsset = authResult.payload?.asset || "UNKNOWN";
-
-            // ★ 提示された要求の「どれか一つ」でも満たしていれば isMet = true になる！
-            const isMet = reqArray.some(req => settledAmount >= req.amount && settledAsset === req.asset);
-
-            if (!isMet) {
-                return {
-                    isValid: false,
-                    // エラーメッセージもundefinedが出ないように修正
-                    error: `Payment insufficient or asset mismatch. Settled: ${settledAmount} ${settledAsset}`,
-                    payload: authResult.payload
-                };
-            }
-        }
-
-        return authResult;
-    }
-
-    buildHateoasResponse(price: number, asset: string) {
-        const instructions = this.verifiers.map(v => v.getChallengeContext());
-        return {
-            error: "Payment Required",
-            message: `奉納額 ${price} ${asset} が必要です。`,
-            challenge: { amount: price, asset: asset },
-            instruction_for_agents: instructions
-        };
     }
 }
 </file>
@@ -704,6 +611,104 @@ export class L402Verifier implements PaymentVerifier {
 }
 </file>
 
+<file path="packages/core/src/index.ts">
+export interface VerifyResult {
+    isValid: boolean;
+    scheme?: string;
+    payload?: {
+        agentId: string;
+        settledAmount: number;
+        asset: string;
+        receiptId: string;
+    };
+    error?: string;
+}
+
+export interface PaymentVerifier {
+    canHandle(req: any): boolean;
+    verify(req: any): Promise<VerifyResult>;
+    getChallengeContext(): Record<string, any>;
+}
+
+export interface PaymentRequirement {
+    amount: number;
+    asset: string;
+}
+
+// 🌟 GPT先生に指摘された「実体のない設計」を本物の実装へ！
+export interface ReceiptStore {
+    checkAndStore(receiptId: string): Promise<boolean>;
+}
+
+export class Payment402 {
+    private receiptStore?: ReceiptStore;
+
+    // オプションで ReceiptStore を受け取れるように変更
+    constructor(private verifiers: PaymentVerifier[], options?: { receiptStore?: ReceiptStore }) {
+        this.receiptStore = options?.receiptStore;
+    }
+
+    // 🌟 Requirement を配列（複数決済手段のOR条件）で受け取れるように進化！
+    public async verify(req: any, requirements?: PaymentRequirement | PaymentRequirement[]): Promise<VerifyResult> {
+        let authResult: VerifyResult = { isValid: false, error: "No valid payment proof provided." };
+
+        for (const verifier of this.verifiers) {
+            if (verifier.canHandle(req)) {
+                authResult = await verifier.verify(req);
+                break;
+            }
+        }
+
+        if (!authResult.isValid) return authResult;
+
+        // 🛡️ リプレイ攻撃防御
+        if (this.receiptStore && authResult.payload?.receiptId) {
+            const isUnique = await this.receiptStore.checkAndStore(authResult.payload.receiptId);
+            if (!isUnique) {
+                return { isValid: false, error: "Payment receipt has already been used (Replay detected)." };
+            }
+        }
+
+        // 🛡️ マルチアセット対応の厳格な価格検証
+        if (requirements) {
+            // 単一オブジェクトでも配列に変換して一括処理
+            const reqArray = Array.isArray(requirements) ? requirements : [requirements];
+            const settledAmount = authResult.payload?.settledAmount || 0;
+            const settledAsset = authResult.payload?.asset || "UNKNOWN";
+
+            // ★ 提示された要求の「どれか一つ」でも満たしていれば isMet = true になる！
+            const isMet = reqArray.some(req => settledAmount >= req.amount && settledAsset === req.asset);
+
+            if (!isMet) {
+                return {
+                    isValid: false,
+                    // エラーメッセージもundefinedが出ないように修正
+                    error: `Payment insufficient or asset mismatch. Settled: ${settledAmount} ${settledAsset}`,
+                    payload: authResult.payload
+                };
+            }
+        }
+
+        return authResult;
+    }
+
+    buildHateoasResponse(requirements: PaymentRequirement | PaymentRequirement[]) {
+        const reqArray = Array.isArray(requirements) ? requirements : [requirements];
+        const instructions = this.verifiers.map(v => v.getChallengeContext());
+        
+        // 「10 SATS または 1 FAUCET_CREDIT」のようなメッセージを自動生成
+        const messages = reqArray.map(req => `${req.amount} ${req.asset}`).join(" または ");
+
+        return {
+            error: "Payment Required",
+            message: `奉納額 ${messages} が必要です。`,
+            challenges: reqArray, 
+            instruction_for_agents: instructions
+        };
+    }
+}
+</file>
+
 <file path="README.md">
 # ⛩️ Monzenmachi Hono Starter Kit
 
@@ -752,7 +757,7 @@ curl -X POST http://localhost:8787/api/agent/omikuji
 
 
 ### セキュリティモデルに関する注記（リプレイ耐性について）
-本ミドルウェアは、エッジ環境での「完全ステートレス」を優先しているため、検証機単体ではリプレイ攻撃（同じマカロンの再送信）を防ぎません。本番環境で厳密な一回性を保証する場合は、Cloudflare KV 等を利用して receiptId (payment_hash) の使用済みチェックをアプリケーション層で行うか、上流の LND ノードでインボイスのステータスを確認するアーキテクチャを併用してください。
+本ミドルウェアはエッジ環境での「高速なステートレス」を基本としていますが、Core層には一回性チェックを行うための ReceiptStore インターフェースが実装済みです。本番環境で厳密なリプレイ耐性を担保する場合は、初期化時に new Payment402(verifiers, { receiptStore: new MyCloudflareKVStore() }) のようにストアを注入（DI）することで、コードを汚さずに堅牢な状態管理を追加できます。
 ---
 </file>
 
@@ -786,27 +791,28 @@ app.post('/api/agent/omikuji', async (c) => {
     const l402Verifier = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
     const payment402 = new Payment402([faucetVerifier, l402Verifier]);
 
-    // 本番用の 10 SATS か、テスト用の 1 FAUCET_CREDIT のどちらかを要求する！
-    const authResult = await payment402.verify(c.req.raw, [
+    const requirements = [
         { amount: 10, asset: "SATS" },
         { amount: 1, asset: "FAUCET_CREDIT" } 
-    ]as any);
+    ];
+
+    const authResult = await payment402.verify(c.req.raw, requirements as any);
 
     // ★ 修正：アプリ側は isValid を信じるだけ。金額不足ならCoreが false にしてくれる。
     if (!authResult.isValid) {
         console.log(`❌ 決済エラー: ${authResult.error}`); // Coreが生成した詳細なエラー理由が出力されます
         
-        const hateoas = payment402.buildHateoasResponse(10, "SATS");
+        const hateoas = payment402.buildHateoasResponse(requirements as any);
         c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>"');
         return c.json(hateoas, 402);
     }
 
     // 奉納（決済）成功時の処理！
     const results = [
-        "大吉！稲妻の如き速さでトランザクションが承認されるでしょう⚡", 
-        "中吉！ガス代が安定し、穏やかな巡礼の一日になります🕊️", 
-        "小吉！HODLあるのみ。徳を積むのに適した日です💎", 
-        "末吉！秘密鍵のバックアップを再確認せよ、という神仏の啓示です🔑"
+        "大吉。稲妻の如き速さでトランザクションが承認されるでしょう⚡", 
+        "中吉。ガス代が安定し、穏やかな巡礼の一日になります🕊️", 
+        "小吉。HODLあるのみ。徳を積むのに適した日です💎", 
+        "末吉。秘密鍵のバックアップを再確認せよ、という神仏の啓示です🔑"
     ];
     const fortune = results[Math.floor(Math.random() * results.length)];
 

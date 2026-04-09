@@ -33,7 +33,7 @@ npm run dev
 ```
 `Ready on http://127.0.0.1:8787` と表示されれば準備完了です！
 
-### 4. エージェントの気分でテスト（祈祷）
+### 4. エージェントになった気分でテスト（祈祷）
 別のターミナルを開き、AIエージェントの代わりにおみくじAPIを叩いてみましょう。
 
 ```bash
@@ -41,7 +41,7 @@ npm run dev
 curl -X POST http://localhost:8787/api/agent/omikuji
 ```
 
-サーバーは賢く `402 Payment Required` を返し、**「Faucetでテストトークンをもらうか、L402で 10 SATS 払いなさい」** という機械読解可能な指示（HATEOAS）を出力するはずです。
+サーバーは `402 Payment Required` を返し、**「10 SATS または 1 FAUCET_CREDIT を支払いなさい」** という機械読解可能な指示（HATEOAS）を出力するはずです。
 
 
 ### セキュリティモデルに関する注記（リプレイ耐性について）
