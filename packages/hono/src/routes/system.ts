@@ -60,7 +60,7 @@ systemApp.post('/network/join', async (c) => {
 systemApp.get('/manifest', (c) => {
     return c.json({
         node_name: "Monzenmachi Outpost",
-        version: "1.0.0",
+        version: "1.0.1",
         description: "An autonomous L402-protected node offering specific computational skills.",
         capabilities: [
             { id: "omikuji", path: "/api/agent/omikuji", method: "POST", price_estimate: "10 SATS" },

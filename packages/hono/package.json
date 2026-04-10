@@ -1,0 +1,21 @@
+﻿{
+  "name": "@ln-church/hono",
+  "version": "1.1.0",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "publishConfig": { "access": "public" },
+  "dependencies": {
+    "@ln-church/server": "*",
+    "@ln-church/verifier-faucet": "*",
+    "@ln-church/verifier-l402": "*",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0"
+  },
+  "scripts": { "build": "tsc" }
+}

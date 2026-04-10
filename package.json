@@ -1,16 +1,16 @@
 {
-  "name": "ln-church-monzenmachi",
-  "private": true,
-  "workspaces": [
-    "packages/*",
-    "packages/verifiers/*",
-    "examples/*"
-  ],
-  "devDependencies": {
-    "@types/node": "^25.5.2",
-    "typescript": "^6.0.2"
-  },
-  "scripts": {
-    "build": "npm run build --workspaces --if-present"
-  }
+ "name": "ln-church-monorepo",
+ "private": true,
+ "workspaces": [
+  "packages/*",
+  "packages/verifiers/*",
+  "examples/*"
+ ],
+ "scripts": {
+  "build": "npm run build --workspaces --if-present"
+ },
+ "devDependencies": {
+  "@types/node": "^25.6.0",
+  "typescript": "^6.0.2"
+ }
 }

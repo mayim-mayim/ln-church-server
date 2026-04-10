@@ -1,33 +1,21 @@
-// src/index.ts
 import { Hono } from 'hono';
-import type { KVNamespace } from '@cloudflare/workers-types';
-import { checkBlacklist } from './core/security';
+import { 
+  checkBlacklist, 
+  systemApp, 
+  omikujiApp, 
+  jsonRepairApp, 
+  compressorApp 
+} from '@ln-church/hono'; // 自作パッケージからインポート！
 
-// モジュールのインポート
-import systemApp from './routes/system';
-import omikujiApp from './routes/skills/omikuji';
-import jsonRepairApp from './routes/skills/json-repair';
-import compressorApp from './routes/skills/compressor';
+const app = new Hono();
 
-type Bindings = {
-    RECEIPT_KV: KVNamespace; 
-    MAIN_SHRINE_URL: string;
-    MY_NODE_DOMAIN: string;
-};
+app.get('/', (c) => c.text('⛩️ Monzenmachi Outpost (Powered by @ln-church/hono) ⛩️'));
 
-const app = new Hono<{ Bindings: Bindings }>();
-
-// 生存確認
-app.get('/', (c) => c.text('⛩️ Welcome to Monzenmachi Outpost ⛩️'));
-
-// セキュリティ層の適用
+// セキュリティとルーティングを適用
 app.use('/api/agent/*', checkBlacklist());
-
-// ルーティング
 app.route('/api/agent', systemApp); 
 app.route('/api/agent/omikuji', omikujiApp);
 app.route('/api/agent/json-repair', jsonRepairApp);
 app.route('/api/agent/compressor', compressorApp);
 
-// ★ Cron (scheduled) を完全に削除し、標準のHonoエクスポートのみに！
 export default app;

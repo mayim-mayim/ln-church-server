@@ -1,19 +1,12 @@
 {
   "name": "monzenmachi-hono-starter",
   "private": true,
-  "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
-  },
   "dependencies": {
-    "@ln-church/server": "*",
-    "@ln-church/verifier-faucet": "*",
-    "@ln-church/verifier-l402": "*",
-    "hono": "^4.0.0",
-    "macaroons.js": "^0.3.9"
+    "@ln-church/hono": "*",
+    "hono": "^4.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260409.1",
-    "wrangler": "^4.81.0"
+    "@cloudflare/workers-types": "^4.0.0",
+    "wrangler": "^4.81.1"
   }
 }
