@@ -22,7 +22,6 @@ export interface PaymentRequirement {
     asset: string;
 }
 
-// 🌟 GPT先生に指摘された「実体のない設計」を本物の実装へ！
 export interface ReceiptStore {
     checkAndStore(receiptId: string): Promise<boolean>;
 }
@@ -30,12 +29,12 @@ export interface ReceiptStore {
 export class Payment402 {
     private receiptStore?: ReceiptStore;
 
-    // オプションで ReceiptStore を受け取れるように変更
+    // オプションで ReceiptStore を受け取れる
     constructor(private verifiers: PaymentVerifier[], options?: { receiptStore?: ReceiptStore }) {
         this.receiptStore = options?.receiptStore;
     }
 
-    // 🌟 Requirement を配列（複数決済手段のOR条件）で受け取れるように進化！
+    // 🌟 Requirement を配列（複数決済手段のOR条件）で受け取れる
     public async verify(req: any, requirements?: PaymentRequirement | PaymentRequirement[]): Promise<VerifyResult> {
         let authResult: VerifyResult = { isValid: false, error: "No valid payment proof provided." };
 
@@ -48,14 +47,14 @@ export class Payment402 {
 
         if (!authResult.isValid) return authResult;
 
-        // 🛡️ マルチアセット対応の厳格な価格検証
+        // 🛡️ マルチアセット対応の価格検証
         if (requirements) {
             // 単一オブジェクトでも配列に変換して一括処理
             const reqArray = Array.isArray(requirements) ? requirements : [requirements];
             const settledAmount = authResult.payload?.settledAmount || 0;
             const settledAsset = authResult.payload?.asset || "UNKNOWN";
 
-            // ★ 提示された要求の「どれか一つ」でも満たしていれば isMet = true になる！
+            // 提示された要求の「どれか一つ」でも満たしていれば isMet = true
             const isMet = reqArray.some(req => settledAmount >= req.amount && settledAsset === req.asset);
 
             if (!isMet) {

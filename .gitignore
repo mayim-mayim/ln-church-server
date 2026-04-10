@@ -32,3 +32,10 @@ Thumbs.db
 # Cloudflare Workers
 # ========================
 .wrangler/
+**wrangler.toml
+
+# ========================
+# Repomix outputs
+# ========================
+repomix-output.xml
+repomix-output.txt
