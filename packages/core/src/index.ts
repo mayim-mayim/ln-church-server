@@ -81,15 +81,34 @@ export class Payment402 {
     buildHateoasResponse(requirements: PaymentRequirement | PaymentRequirement[]) {
         const reqArray = Array.isArray(requirements) ? requirements : [requirements];
         const instructions = this.verifiers.map(v => v.getChallengeContext());
-        
-        // 「10 SATS または 1 FAUCET_CREDIT」のようなメッセージを自動生成
-        const messages = reqArray.map(req => `${req.amount} ${req.asset}`).join(" または ");
+        const primaryReq = reqArray[0]; 
 
         return {
             error: "Payment Required",
-            message: `奉納額 ${messages} が必要です。`,
-            challenges: reqArray, 
-            instruction_for_agents: instructions
+            message: `奉納額 ${primaryReq.amount} ${primaryReq.asset} が必要です。`,
+            challenge: {
+                scheme: "Payment", // MPP標準をデフォルトに寄せる
+                network: "lightning",
+                amount: primaryReq.amount,
+                asset: primaryReq.asset,
+                parameters: {
+                    invoice: "<fetch-via-hateoas>", 
+                    paymentHash: "<fetch-via-hateoas>"
+                }
+            },
+            instruction_for_agents: {
+                guide: "Pay LN invoice and return standard Payment header.",
+                steps: [
+                    "1. Pay invoice",
+                    "2. Re-POST with Authorization: Payment <preimage>"
+                ],
+                next_request_schema: {
+                    scheme: "MPP",
+                    asset: primaryReq.asset,
+                    amount: primaryReq.amount
+                },
+                options: instructions 
+            }
         };
     }
 }

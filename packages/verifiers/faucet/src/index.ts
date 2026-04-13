@@ -61,7 +61,7 @@ export class FaucetVerifier implements PaymentVerifier {
         return {
             scheme: this.scheme,
             guide: "Faucet token required. Fetch a grant_token from /api/agent/faucet and set the Authorization header.",
-            next_request_instruction: {
+            next_request_schema: {
                 headers: {
                     Authorization: "Faucet <grant_token>"
                 }

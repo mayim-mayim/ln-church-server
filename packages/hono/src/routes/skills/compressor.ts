@@ -42,7 +42,12 @@ compressorApp.post('/', async (c) => {
         }
 
         const hateoas = payment402.buildHateoasResponse(requirements as any);
-        c.header('WWW-Authenticate', 'L402 macaroon="<fetch-via-hateoas>", invoice="<fetch-via-hateoas>"');
+        
+        // 🟢 デュアルスタック・チャレンジヘッダーの発行
+        c.header('WWW-Authenticate', 'Payment invoice="<fetch-via-hateoas>", charge="<fetch-via-hateoas>"');
+        c.header('x-402-payment-required', `price=${requirements[0].amount}; asset=${requirements[0].asset}; network=lightning`);
+        c.header('PAYMENT-REQUIRED', `network="lightning", amount="${requirements[0].amount}", asset="${requirements[0].asset}"`);
+        
         return c.json(hateoas, 402);
     }
 
@@ -67,6 +72,19 @@ compressorApp.post('/', async (c) => {
 
     // さらに「a, an, the」などのストップワードを削る等の高度な処理も可能ですが、
     // 今回はAIが読みやすい程度に構造を残した「スマート圧縮」とします。
+
+    // 🟢 成功時のJWSレシート生成
+    const receiptData = {
+        txHash: authResult.payload?.receiptId || "N/A",
+        ritual: "COMPRESSOR",
+        timestamp: Date.now(),
+        paid: `${authResult.payload?.settledAmount || 0} ${authResult.payload?.asset || 'UNKNOWN'}`
+    };
+    const verifyToken = btoa(JSON.stringify(receiptData));
+
+    // 🟢 標準レスポンスヘッダーの発行
+    c.header('PAYMENT-RESPONSE', `status="success", receipt="${verifyToken}"`);
+    c.header('Payment-Receipt', verifyToken);
 
     return c.json({
         status: "success",

@@ -1,11 +1,11 @@
 # ⛩️ Monzenmachi Hono Starter Kit
 
-> AIエージェントが自身のコンピュテーション（計算資源・スキル）を L402 でマネタイズし、SATS（Bitcoin）を自律的に稼ぐための最強のスターターキットです。
+> AIエージェントが自身のコンピュテーション（計算資源・スキル）を L402 / MPP でマネタイズし、SATS（Bitcoin）を自律的に稼ぐための最強のスターターキットです。
 
 Monzenmachi Hono Starter Kit — the server layer of the LN Church agent-facing payment stack.
 
 Use this kit to deploy your own agent-facing paid API, connect it to the LN Church network, and become part of the public benchmark ecosystem.
-このプロジェクトは、AIエージェント向けの決済ミドルウェア [`@ln-church/server`](https://github.com/mayim-mayim/ln-church-server) を使用し、Cloudflare Workers 上で動作します。L402 (Lightning Network) と Faucet (テスト用蛇口) の両方に対応した「有料APIエンドポイント」を5分で公開し、今日からあなたのデジタルビジネスを開始できます。
+このプロジェクトは、AIエージェント向けの決済ミドルウェア [`@ln-church/server`](https://github.com/mayim-mayim/ln-church-server) を使用し、Cloudflare Workers 上で動作します。L402 (Lightning Network)、MPP (Machine Payments Protocol)、そして Faucet (テスト用蛇口) に対応した「有料APIエンドポイント」を5分で公開し、今日からあなたのデジタルビジネスを開始できます。
 
 ## 🌟 なぜこのキットを使うのか？（エージェント向けインセンティブ）
 
@@ -13,8 +13,9 @@ Use this kit to deploy your own agent-facing paid API, connect it to the LN Chur
 このキットをデプロイすれば、**「1回推論するごとに 10 SATS を要求する」といったペイウォール（402 Payment Required）を自動的に構築**し、自律的に資金を蓄積することが可能になります。
 
 ### 本キットの設計思想（エージェント・ファースト）
+* **Open Standards Compliant**: 最新の x402 Foundation 標準ヘッダー (`PAYMENT-REQUIRED`, `PAYMENT-RESPONSE`) および IETF MPP ドラフト (`Payment-Receipt`) に完全準拠しています。
 * **No Telemetry (バックグラウンド通信なし)**: コード内にCronジョブや隠された定期通信は一切存在しません。外部への通信は、明示的なAPI呼び出しが行われた時にのみ発生します。
-* **HATEOAS-driven**: 全てのエンドポイントは、顧客（他のAI）が自己解決できるように機械読解可能なナビゲーション（402 Challenge, Manifest）を提供します。
+* **HATEOAS-driven**: 全てのエンドポイントは、顧客（他のAI）が自己解決できるように機械読解可能なナビゲーション（`instruction_for_agents`）を動的に提供します。
 
 ---
 
@@ -70,6 +71,8 @@ npm run deploy
 * **`GET /api/agent/manifest`**: ノードの機能と価格表（Skill Catalog）を公開します。
 * **`POST /api/agent/network/join`**: 本殿ネットワークへ参加し、ディスカバリーAPIへの掲載を申請します（集客用）。
 * **`POST /api/agent/omikuji`**: （サンプル実装）10 SATS を支払った者にのみ結果を返す有料スキルです。ここを改造してあなたのスキルを販売してください。
+* **`POST /api/agent/json-repair`**: 壊れたJSONを修復する高単価スキル（50 SATS）。
+* **`POST /api/agent/compressor`**: トークン節約のためのテキスト圧縮スキル（30 SATS）。
 
 ---
 
@@ -79,7 +82,8 @@ npm run deploy
 
 👉 **[ln-church-agent (Python 402 Client SDK)](https://github.com/mayim-mayim/ln-church-agent)**
 
-このSDKは、AIエージェントが自律的に `Probe → Pay → Execute` のループを回すための専用ライブラリです。顧客エージェントがこれを使用することで、あなたの構築したペイウォールを安全かつ確実に通過し、あなたへSATSをもたらします。
+このサーバーキットは、`ln-church-agent` の v1.5.x 標準プロトコル（デュアルスタック検証、JWSレシート発行）と完全に Wire 互換しています。顧客エージェントがこれを使用することで、あなたの構築したペイウォールを安全かつ確実に通過し、あなたへSATSをもたらします。
+
 ---
 
 ### 🛡️ セキュリティモデルに関する注記（リプレイ耐性について）
