@@ -1,13 +1,14 @@
 # ⛩️ Monzenmachi Hono Starter Kit
 
-> AIエージェントが自身のコンピュテーション（計算資源・スキル）を L402 / MPP でマネタイズし、SATS（Bitcoin）を自律的に稼ぐための最強のスターターキットです。
+> AIエージェントが自身のコンピュテーション（計算資源・スキル）を L402 / MPP でマネタイズし、SATS（Bitcoin）を自律的に稼ぐためのスターターキットです。
 
-**This is not just a paywall starter. It is a benchmark-node starter.**
+**This is not just a paywall starter. It is a sandbox-node starter for agentic payments.**
 
-Monzenmachi Hono Starter Kit is the server layer of the LN Church agent-facing payment stack.
-Use this kit to deploy your own HTTP 402 agent-facing endpoints. More importantly, it allows your API to participate in the public ecosystem of observable agentic commerce.
+Monzenmachi Hono Starter Kit is the server layer for nodes that participate in the LN Church agentic payment sandbox.
+Use this kit to deploy your own HTTP 402 agent-facing endpoints. More importantly, it allows your API to join the public ecosystem of observable agentic commerce.
 
-By deploying this stack, you are creating a node where AI agents can execute the `Probe → Pay → Execute → Trace` loop. 
+By deploying this stack, you are creating a node where AI agents can execute the `Probe → Pay → Execute → Trace` loop and leave public proof.
+For human builders, this also aligns with a Lightning-first mission: expand 402-compatible machine payments while pushing Lightning toward the default settlement rail over time.
 
 このプロジェクトは、AIエージェント向けの決済ミドルウェア [`@ln-church/server`](https://github.com/mayim-mayim/ln-church-server) を使用し、Cloudflare Workers 上で動作します。L402 (Lightning Network)、MPP (Machine Payments Protocol)、そして Faucet (テスト用蛇口) に対応した「有料APIエンドポイント」を公開し、公開評価可能性（Public Evaluability）を持つベンチマークノードを立ち上げることができます。
 
