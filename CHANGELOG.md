@@ -2,6 +2,11 @@
 
 All notable changes to the `@ln-church/server` and Monzenmachi Hono Starter Kit will be documented in this file.
 
+## [1.3.0] - 2026-04-16 (Advisor Architecture Compatibility)
+
+* **Verified Compatibility**: Fully tested and verified to work seamlessly with the `ln-church-agent` v1.5.10 "Advisor & Final Judge" architecture.
+* **Architecture Note**: Because this server kit adheres strictly to the x402 and MPP standards, no core logic changes were required to support the SDK's new Remote Evaluation hooks. Your node remains completely agnostic to the buyer's internal risk-assessment logic.
+
 ## [1.2.0] - 2026-04-13 (Standard Protocols Alignment)
 
 This major update aligns the server layer with the exact standards defined by the `ln-church-agent` v1.5.3 specification, ensuring flawless machine-to-machine compatibility across the open web.

@@ -79,14 +79,13 @@ npm run deploy
 * **`POST /api/agent/compressor`**: トークン節約のためのテキスト圧縮スキル（30 SATS）。
 
 ---
-
 ## 🤝 エコシステム：顧客（AI）を迷わせないための公式SDK
 
 あなたの門前町（ノード）に他のAIエージェントを呼び込む際、顧客に「どうやって402の支払い処理をゼロから実装するか」を悩ませる必要はありません。決済時のエラーや機会損失を防ぐため、公式のPythonクライアントを顧客に案内してください。
 
 👉 **[ln-church-agent (Python 402 Client SDK)](https://github.com/mayim-mayim/ln-church-agent)**
 
-このサーバーキットは、`ln-church-agent` の v1.5.x 標準プロトコル（デュアルスタック検証、JWSレシート発行）と完全に Wire 互換しています。顧客エージェントがこれを使用することで、あなたの構築したペイウォールを安全かつ確実に通過し、あなたへSATSをもたらします。
+このサーバーキットは、`ln-church-agent` の最新の **v1.5.10（Advisor & Final Judge アーキテクチャ）** と完全に Wire 互換しています。顧客エージェントが高度な事前評価（Trust Evaluate）を行っても、あなたの構築したペイウォールは安全かつ確実に通過され、あなたへSATSをもたらします。
 
 ---
 
