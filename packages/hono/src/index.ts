@@ -9,6 +9,8 @@ import omikujiApp from './routes/skills/omikuji';
 import jsonRepairApp from './routes/skills/json-repair';
 import compressorApp from './routes/skills/compressor';
 
+import benchmarkApp from './routes/benchmark';
+
 // すべての自信作を外部から使えるようにエクスポート
 export * from './core/config';
 export * from './core/receipt-store';
@@ -40,6 +42,7 @@ app.route('/api/agent', systemApp);
 app.route('/api/agent/omikuji', omikujiApp);
 app.route('/api/agent/json-repair', jsonRepairApp);
 app.route('/api/agent/compressor', compressorApp);
+app.route('/api/agent/benchmark', benchmarkApp);
 
 // ★ Cron (scheduled) を完全に削除し、標準のHonoエクスポートのみに！
 export default app;

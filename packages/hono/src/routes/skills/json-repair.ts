@@ -42,13 +42,9 @@ jsonRepairApp.post('/', async (c) => {
         }
 
         const hateoas = payment402.buildHateoasResponse(requirements as any);
+        const headers = payment402.buildChallengeHeaders(requirements as any);
         
-        // 🟢 デュアルスタック・チャレンジヘッダーの発行
-        c.header('WWW-Authenticate', 'Payment invoice="<fetch-via-hateoas>", charge="<fetch-via-hateoas>"');
-        c.header('x-402-payment-required', `price=${requirements[0].amount}; asset=${requirements[0].asset}; network=lightning`);
-        c.header('PAYMENT-REQUIRED', `network="lightning", amount="${requirements[0].amount}", asset="${requirements[0].asset}"`);
-        
-        return c.json(hateoas, 402);
+        return c.json(hateoas, 402, headers);
     }
 
     // 🩹 3. 本命のロジック (JSON修復外科医)
@@ -104,10 +100,7 @@ jsonRepairApp.post('/', async (c) => {
         paid: `${authResult.payload?.settledAmount || 0} ${authResult.payload?.asset || 'UNKNOWN'}`
     };
     const verifyToken = btoa(JSON.stringify(receiptData));
-
-    // 🟢 標準レスポンスヘッダーの発行
-    c.header('PAYMENT-RESPONSE', `status="success", receipt="${verifyToken}"`);
-    c.header('Payment-Receipt', verifyToken);
+    const receiptHeaders = payment402.buildSuccessReceiptHeaders(verifyToken);
 
     // 成功レスポンス
     return c.json({
@@ -115,7 +108,7 @@ jsonRepairApp.post('/', async (c) => {
         message: isRepaired ? "JSON was successfully repaired." : "JSON was already valid.",
         result: repairedJson,
         paid: `${authResult.payload?.settledAmount || 0} ${authResult.payload?.asset || 'UNKNOWN'}`
-    });
+    }, 200, receiptHeaders);
 });
 
 export default jsonRepairApp;

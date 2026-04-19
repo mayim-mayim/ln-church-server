@@ -8,8 +8,8 @@
  ],
  "scripts": {
   "build": "npm run build --workspaces --if-present",
-    "test": "vitest run",
-    "test:watch": "vitest"
+  "test": "vitest run",
+  "test:watch": "vitest"
  },
  "devDependencies": {
   "@types/node": "^25.6.0",

@@ -26,6 +26,22 @@ export interface ReceiptStore {
     checkAndStore(receiptId: string): Promise<boolean>;
 }
 
+export interface ChallengeHeaders extends Record<string, string> {
+    'WWW-Authenticate': string;
+    'x-402-payment-required': string;
+    'PAYMENT-REQUIRED': string;
+}
+
+export interface ReceiptHeaders extends Record<string, string> {
+    'PAYMENT-RESPONSE': string;
+    'Payment-Receipt': string;
+}
+
+export interface ChallengeOptions {
+    scheme?: string;   // デフォルト: 'Payment'
+    network?: string;  // デフォルト: 'lightning'
+}
+
 export class Payment402 {
     private receiptStore?: ReceiptStore;
 
@@ -76,6 +92,32 @@ export class Payment402 {
         }
 
         return authResult;
+    }
+
+    // 🌟 新規追加: Provider Contract の標準化 (Challenge)
+    public buildChallengeHeaders(
+        requirements: PaymentRequirement | PaymentRequirement[], 
+        options?: ChallengeOptions
+    ): ChallengeHeaders {
+        const reqArray = Array.isArray(requirements) ? requirements : [requirements];
+        const primaryReq = reqArray[0];
+        
+        const scheme = options?.scheme || "Payment";
+        const network = options?.network || "lightning";
+
+        return {
+            'WWW-Authenticate': `${scheme} invoice="<fetch-via-hateoas>", charge="<fetch-via-hateoas>"`,
+            'x-402-payment-required': `price=${primaryReq.amount}; asset=${primaryReq.asset}; network=${network}`,
+            'PAYMENT-REQUIRED': `network="${network}", amount="${primaryReq.amount}", asset="${primaryReq.asset}"`
+        };
+    }
+
+    // 🌟 新規追加: Provider Contract の標準化 (Receipt)
+    public buildSuccessReceiptHeaders(receiptToken: string): ReceiptHeaders {
+        return {
+            'PAYMENT-RESPONSE': `status="success", receipt="${receiptToken}"`,
+            'Payment-Receipt': receiptToken
+        };
     }
 
     buildHateoasResponse(requirements: PaymentRequirement | PaymentRequirement[]) {

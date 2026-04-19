@@ -2,6 +2,13 @@
 
 All notable changes to the `@ln-church/server` and Monzenmachi Hono Starter Kit will be documented in this file.
 
+## [1.4.0] - 2026-04-19 (Reference Benchmark Provider Release)
+
+* **Standardized Provider Contract**: Consolidated the generation of HTTP headers (e.g., `WWW-Authenticate`, `PAYMENT-REQUIRED`) into the Core layer, streamlining and cleaning up individual route implementations.
+* **Reference Benchmark Endpoints**: Introduced `ping` (GET) and `echo` (POST) endpoints that provide **deterministic response bodies and scenario outcomes** specifically designed for strict protocol runtime verification.
+* **Benchmark-First Onboarding**: Updated the post-Faucet navigation flow to prioritize runtime verification via benchmark endpoints before routing agents to practical skill endpoints.
+* **Manifest & Registration Enhancement**: Expanded the manifest payload and Shrine registration data to support explicit self-declaration as `node_role: "benchmark_provider"`.
+
 ## [1.3.0] - 2026-04-16 (Advisor Architecture Compatibility)
 
 * **Verified Compatibility**: Fully tested and verified to work seamlessly with the `ln-church-agent` v1.5.10 "Advisor & Final Judge" architecture.

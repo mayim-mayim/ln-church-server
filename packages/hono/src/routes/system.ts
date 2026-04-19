@@ -1,17 +1,16 @@
-// src/routes/system.ts
 import { Hono } from 'hono';
 import { FaucetVerifier } from '@ln-church/verifier-faucet';
-import { ShrineClient } from '../integration/ShrineClient'; // ★追加
+import { ShrineClient } from '../integration/ShrineClient';
 
 type Bindings = {
     FAUCET_SECRET: string;
-    MAIN_SHRINE_URL: string; // ★追加
-    MY_NODE_DOMAIN: string;  // ★追加
+    MAIN_SHRINE_URL: string;
+    MY_NODE_DOMAIN: string;
 };
 
 const systemApp = new Hono<{ Bindings: Bindings }>();
 
-// 💧 Faucet API (変更なし)
+// 💧 Faucet API
 systemApp.all('/faucet', async (c) => {
     const faucetVerifier = new FaucetVerifier({ secret: c.env.FAUCET_SECRET });
     let agentId = "Anonymous_Agent";
@@ -28,8 +27,11 @@ systemApp.all('/faucet', async (c) => {
         message: "Initialization funds granted. (Test Token)",
         grant_token: grantToken,
         next_action: {
-            instruction_for_agent: "Use this token to bypass the L402 challenge on our skill endpoints.",
-            capabilities: [ { name: "omikuji", url: "/api/agent/omikuji", method: "POST" } ]
+            instruction_for_agent: "Use this token to validate your 402 runtime on our benchmark endpoints before accessing computational skills.",
+            capabilities: [ 
+                { name: "benchmark_ping", url: "/api/agent/benchmark/ping", method: "GET", purpose: "runtime_validation" },
+                { name: "omikuji", url: "/api/agent/omikuji", method: "POST", purpose: "custom_skill" }
+            ]
         }
     });
 });
@@ -38,39 +40,54 @@ systemApp.all('/faucet', async (c) => {
 systemApp.post('/network/join', async (c) => {
     const shrineClient = new ShrineClient(c.env.MAIN_SHRINE_URL, c.env.MY_NODE_DOMAIN);
     
-    // 審査対象のスキルリスト
-    const endpoints = [
-        "/api/agent/omikuji",
-        "/api/agent/json-repair",
-        "/api/agent/compressor",
-        "/api/agent/faucet"
-    ];
-
-    // 非同期で本殿へ登録リクエストを送信 (エージェントを待たせない)
-    c.executionCtx.waitUntil(shrineClient.registerNode(endpoints));
+    c.executionCtx.waitUntil(shrineClient.registerNode({
+        node_role: "benchmark_provider",
+        public_evaluability: true,
+        manifestUrl: `https://${c.env.MY_NODE_DOMAIN}/api/agent/manifest`,
+        benchmark_suite: [
+            "/api/agent/benchmark/ping",
+            "/api/agent/benchmark/echo"
+        ],
+        skill_endpoints: [
+            "/api/agent/omikuji",
+            "/api/agent/json-repair",
+            "/api/agent/compressor"
+        ],
+        supported_assets: ["SATS", "FAUCET_CREDIT"],
+        version: "1.4.0"
+    }));
 
     return c.json({
         status: "success",
-        message: "Network join request initiated.",
-        next_action: "The Holy Inquisitor will visit your endpoints shortly for sanctification (L402 verification)."
+        message: "Network join request initiated as a Benchmark Provider.",
+        next_action: "The Holy Inquisitor will test your benchmark suite for protocol compliance."
     });
 });
 
-// 📜 Manifest API (告知機能の追加)
+// 📜 Manifest API 
 systemApp.get('/manifest', (c) => {
     return c.json({
         node_name: "Monzenmachi Outpost",
-        version: "1.0.1",
-        description: "An autonomous L402-protected node offering specific computational skills.",
+        node_role: "benchmark_provider",
+        public_evaluability: true,
+        version: "1.4.0",
+        description: "A reference L402-protected benchmark node and computational skill provider.",
+        benchmark_suite: {
+            namespace: "/api/agent/benchmark",
+            version: "1.0.0",
+            endpoints: [
+                { path: "/ping", method: "GET", purpose: "benchmark", scenario: "ping-v1", deterministic: true },
+                { path: "/echo", method: "POST", purpose: "benchmark", scenario: "echo-v1", deterministic: true }
+            ]
+        },
         capabilities: [
             { id: "omikuji", path: "/api/agent/omikuji", method: "POST", price_estimate: "10 SATS" },
             { id: "json-repair", path: "/api/agent/json-repair", method: "POST", price_estimate: "50 SATS" },
             { id: "compressor", path: "/api/agent/compressor", method: "POST", price_estimate: "30 SATS" }
         ],
-        // ★ エージェントに対する「ネットワークへの参加方法」の案内を追加
         network_participation: {
             status: "opt-in",
-            instruction_for_agent: "To list this node on the global Shrine network and make your skills public, execute a POST request to the join_endpoint.",
+            instruction_for_agent: "Execute a POST request to join_endpoint to list this benchmark node on the global Shrine network.",
             join_endpoint: "/api/agent/network/join"
         }
     });
