@@ -15,19 +15,23 @@ export class FaucetVerifier implements PaymentVerifier {
     // ==========================================
     // 🛡️ 新機能：HTTPヘッダーからFaucetトークンを抽出する
     // ==========================================
-    private extractToken(req: any): string | null {
-        if (!req || !req.headers) return null;
-        
-        const authHeader = typeof req.headers.get === 'function' 
-            ? req.headers.get('Authorization') 
-            : req.headers['authorization'] || req.headers['Authorization'];
+    private async extractToken(req: any): Promise<string | null> {
+        if (!req) return null;
+        const authHeader = typeof req.headers?.get === 'function' 
+            ? req.headers.get('Authorization') : req.headers?.['authorization'] || req.headers?.['Authorization'];
 
-        if (!authHeader) return null;
+        if (authHeader) {
+            const parts = authHeader.split(' ');
+            if (parts.length === 2 && parts[0].toUpperCase() === 'FAUCET') return parts[1];
+        }
 
-        // "Faucet <grant_token>" の形式を分解
-        const parts = authHeader.split(' ');
-        if (parts.length === 2 && parts[0].toUpperCase() === 'FAUCET') {
-            return parts[1];
+        // ★ paymentOverride 対応
+        if (typeof req.clone === 'function' && req.method !== 'GET' && req.method !== 'HEAD') {
+            try {
+                const cloned = req.clone();
+                const body = await cloned.json();
+                if (body?.paymentOverride?.type === 'faucet') return body.paymentOverride.proof;
+            } catch (e) {}
         }
         return null;
     }
@@ -51,8 +55,8 @@ export class FaucetVerifier implements PaymentVerifier {
     }
 
     // 1. 引数を req: any だけに修正！
-    public canHandle(req: any): boolean {
-        return this.extractToken(req) !== null;
+    public async canHandle(req: any): Promise<boolean> { // ★ async に変更
+        return (await this.extractToken(req)) !== null;
     }
 
     // 2. 指示書もJSONボディではなくヘッダーを使うように修正！
@@ -71,7 +75,7 @@ export class FaucetVerifier implements PaymentVerifier {
 
     // 3. 引数を req: any だけに修正し、決済成功時の金額をセット！
     public async verify(req: any): Promise<VerifyResult> {
-        const token = this.extractToken(req);
+        const token = await this.extractToken(req);
 
         if (!token) {
             return { isValid: false, error: "Missing Faucet token in Authorization header." };

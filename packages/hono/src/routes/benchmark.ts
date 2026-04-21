@@ -1,9 +1,6 @@
 import { Hono } from 'hono';
 import type { KVNamespace } from '@cloudflare/workers-types';
-import { Payment402 } from '@ln-church/server';
-import { FaucetVerifier } from '@ln-church/verifier-faucet';
-import { L402Verifier } from '@ln-church/verifier-l402';
-import { CloudflareKVReceiptStore } from '../core/receipt-store';
+import { getPayment402 } from '../core/payment';
 
 type Bindings = {
     FAUCET_SECRET: string;
@@ -13,15 +10,12 @@ type Bindings = {
 
 const benchmarkApp = new Hono<{ Bindings: Bindings }>();
 
-// 共通設定: ベンチマークは一律 10 SATS / 1 FAUCET_CREDIT
-const BENCH_REQUIREMENTS = [{ amount: 10, asset: "SATS" }, { amount: 1, asset: "FAUCET_CREDIT" }];
-
-const getPayment402 = (c: any) => {
-    const faucet = new FaucetVerifier({ secret: c.env.FAUCET_SECRET });
-    const l402 = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
-    const kvStore = new CloudflareKVReceiptStore(c.env.RECEIPT_KV);
-    return new Payment402([faucet, l402], { receiptStore: kvStore });
-};
+// 共通設定: ベンチマークは一律 10 SATS / 1 FAUCET_CREDIT / 1 GRANT_CREDIT
+const BENCH_REQUIREMENTS = [
+    { amount: 10, asset: "SATS" }, 
+    { amount: 1, asset: "FAUCET_CREDIT" }, 
+    { amount: 1, asset: "GRANT_CREDIT" }
+];
 
 /**
  * A. GET /ping

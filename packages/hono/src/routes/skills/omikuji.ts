@@ -1,11 +1,8 @@
 // src/routes/skills/omikuji.ts
 import { Hono } from 'hono';
 import type { KVNamespace } from '@cloudflare/workers-types';
-import { Payment402 } from '@ln-church/server'; 
-import { FaucetVerifier } from '@ln-church/verifier-faucet';
-import { L402Verifier } from '@ln-church/verifier-l402';
-import { CloudflareKVReceiptStore } from '../../core/receipt-store';
 import { ShrineClient } from '../../integration/ShrineClient';
+import { getPayment402 } from '../../core/payment';
 
 type Bindings = {
     FAUCET_SECRET: string;
@@ -18,12 +15,14 @@ type Bindings = {
 const omikujiApp = new Hono<{ Bindings: Bindings }>();
 
 omikujiApp.post('/', async (c) => {
-    const faucetVerifier = new FaucetVerifier({ secret: c.env.FAUCET_SECRET });
-    const l402Verifier = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
-    const kvStore = new CloudflareKVReceiptStore(c.env.RECEIPT_KV);
-    const payment402 = new Payment402([faucetVerifier, l402Verifier], { receiptStore: kvStore });
 
-    const requirements = [ { amount: 10, asset: "SATS" }, { amount: 1, asset: "FAUCET_CREDIT" } ];
+    const payment402 = getPayment402(c);
+    const requirements = [ 
+        { amount: 10, asset: "SATS" }, 
+        { amount: 1, asset: "FAUCET_CREDIT" },
+        { amount: 1, asset: "GRANT_CREDIT" } 
+    ];
+
     const authResult = await payment402.verify(c.req.raw, requirements as any);
 
     if (!authResult.isValid) {
@@ -31,6 +30,7 @@ omikujiApp.post('/', async (c) => {
         const agentId = c.req.header('x-agent-id') || 'unknown';
         const errorMsg = authResult.error || "";
         const isMalicious = errorMsg.includes("Replay") || errorMsg.includes("Signature") || errorMsg.includes("Invalid token");
+        const isGrantError = errorMsg.includes("expired") || errorMsg.includes("mismatch") || errorMsg.includes("scope") || errorMsg.includes("failed");
         
         if (isMalicious && agentId !== 'unknown') {
             const shrineClient = new ShrineClient(c.env.MAIN_SHRINE_URL, c.env.MY_NODE_DOMAIN);
@@ -39,11 +39,15 @@ omikujiApp.post('/', async (c) => {
             );
         }
 
-        const hateoas = payment402.buildHateoasResponse(requirements as any);
-        const headers = payment402.buildChallengeHeaders(requirements as any);
-        
-        return c.json(hateoas, 402, headers);
+        // ★ 指定通り、不正・期限切れトークンに対しては 403 を返すように調整
+        if (isMalicious || isGrantError) {
+            return c.json({ status: "error", error_code: "FORBIDDEN", message: errorMsg }, 403);
+        }
+
+        const hateoas = payment402.buildHateoasResponse(requirements as any);   
+        return c.json(hateoas, 402, payment402.buildChallengeHeaders(requirements as any));
     }
+    
 
     // 🟢 成功時のJWSレシート生成 (ダミー実装: 本番ではHMAC署名する)
     const receiptData = {

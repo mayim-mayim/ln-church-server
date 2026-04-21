@@ -53,8 +53,8 @@ systemApp.post('/network/join', async (c) => {
             "/api/agent/json-repair",
             "/api/agent/compressor"
         ],
-        supported_assets: ["SATS", "FAUCET_CREDIT"],
-        version: "1.4.0"
+        supported_assets: ["SATS", "FAUCET_CREDIT", "GRANT_CREDIT"],
+        version: "1.5.0"
     }));
 
     return c.json({
@@ -70,7 +70,7 @@ systemApp.get('/manifest', (c) => {
         node_name: "Monzenmachi Outpost",
         node_role: "benchmark_provider",
         public_evaluability: true,
-        version: "1.4.0",
+        version: "1.5.0",
         description: "A reference L402-protected benchmark node and computational skill provider.",
         benchmark_suite: {
             namespace: "/api/agent/benchmark",

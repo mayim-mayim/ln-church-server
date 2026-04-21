@@ -1,6 +1,6 @@
 ﻿{
   "name": "@ln-church/hono",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
@@ -11,6 +11,7 @@
   "dependencies": {
     "@ln-church/server": "*",
     "@ln-church/verifier-faucet": "*",
+    "@ln-church/verifier-grant": "*",
     "@ln-church/verifier-l402": "*",
     "hono": "^4.0.0"
   },

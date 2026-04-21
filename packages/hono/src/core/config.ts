@@ -10,8 +10,8 @@ export const MONZEN_CONFIG = {
     // 自身の門前町ドメインのデフォルト値
     MY_NODE_DOMAIN: "Your-domain-URL",
     // バージョン情報
-    VERSION: "0.1.0",
+    VERSION: "1.5.0",
 
     // 推奨される決済アセット
-    SUPPORTED_ASSETS: ["SATS", "FAUCET_CREDIT"]
+    SUPPORTED_ASSETS: ["SATS", "FAUCET_CREDIT", "GRANT_CREDIT"]
 } as const;

@@ -6,6 +6,8 @@ describe('Integration: Omikuji Route Provider Contract', () => {
     // Honoの c.env に渡される環境変数のモック
     const mockEnv = {
         FAUCET_SECRET: 'test-faucet-secret',
+        TEST_GRANT_SECRET: 'test-secret-key',
+        TRUSTED_GRANT_ISSUERS: 'https://trusted-issuer.example.com',
         MACAROON_SECRET: 'test-macaroon-secret',
         RECEIPT_KV: {
             get: vi.fn().mockResolvedValue(null), // リプレイチェック(未使用)

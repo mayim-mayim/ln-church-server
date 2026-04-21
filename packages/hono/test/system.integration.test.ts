@@ -27,7 +27,7 @@ describe('System Routes Integration (Benchmark-First)', () => {
         const res = await systemApp.request(new Request('http://localhost/manifest'), undefined, mockEnv);
         const json = await res.json();
         
-        expect(json.version).toBe("1.4.0");
+        expect(json.version).toBe("1.5.0");
         expect(json.node_role).toBe("benchmark_provider");
         expect(json.public_evaluability).toBe(true);
         expect(json.benchmark_suite.endpoints[0].scenario).toBe("ping-v1");

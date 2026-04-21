@@ -2,6 +2,15 @@
 
 All notable changes to the `@ln-church/server` and Monzenmachi Hono Starter Kit will be documented in this file.
 
+## [1.5.0] - 2026-04-21 (Universal Grant Authorization)
+
+* **Grant Verifier Introduced**: Added `@ln-church/verifier-grant` to support multi-tenant, issuer-open authorization models via signed JWS tokens.
+* **Advanced JWKS Key Resolution**: Nodes now dynamically resolve trusted issuer public keys using the standard `/.well-known/jwks.json` convention. Features full support for Key ID (`kid`) based resolution and caching to enable safe key rotation.
+* **Ed25519 / EdDSA Support**: Upgraded the cryptographic verifier to natively support `OKP` (Ed25519) signatures, aligning with modern Web3/Agentic issuer standards alongside existing ES256/RS256 support.
+* **Strict Agent Binding**: Implemented mandatory validation between the grant's `sub` claim and the requesting agent's identity (`x-agent-id` header or payload) to strictly prevent cross-agent token hijacking.
+* **Universal Asset Expansion**: The `GRANT_CREDIT` asset is now officially supported across the entire node surface, including all benchmark endpoints (`ping`, `echo`) and computational skills (`omikuji`, `json-repair`, `compressor`).
+* **Payment Override Specification**: Fully supports the `{ paymentOverride: { type: "grant" } }` JSON body payload specification for flexible agent integration.
+
 ## [1.4.0] - 2026-04-19 (Reference Benchmark Provider Release)
 
 * **Standardized Provider Contract**: Consolidated the generation of HTTP headers (e.g., `WWW-Authenticate`, `PAYMENT-REQUIRED`) into the Core layer, streamlining and cleaning up individual route implementations.

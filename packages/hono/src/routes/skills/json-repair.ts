@@ -1,11 +1,8 @@
 // src/routes/skills/json-repair.ts
 import { Hono } from 'hono';
 import type { KVNamespace } from '@cloudflare/workers-types';
-import { Payment402 } from '@ln-church/server'; 
-import { FaucetVerifier } from '@ln-church/verifier-faucet';
-import { L402Verifier } from '@ln-church/verifier-l402';
-import { CloudflareKVReceiptStore } from '../../core/receipt-store';
 import { ShrineClient } from '../../integration/ShrineClient';
+import { getPayment402 } from '../../core/payment';
 
 type Bindings = {
     FAUCET_SECRET: string;
@@ -19,13 +16,10 @@ const jsonRepairApp = new Hono<{ Bindings: Bindings }>();
 
 jsonRepairApp.post('/', async (c) => {
     // 🛡️ 1. 決済モジュールの初期化
-    const faucetVerifier = new FaucetVerifier({ secret: c.env.FAUCET_SECRET });
-    const l402Verifier = new L402Verifier({ macaroonSecret: c.env.MACAROON_SECRET });
-    const kvStore = new CloudflareKVReceiptStore(c.env.RECEIPT_KV);
-    const payment402 = new Payment402([faucetVerifier, l402Verifier], { receiptStore: kvStore });
+    const payment402 = getPayment402(c); // ★ 初期化をシンプルに
 
-    // 💰 料金設定: 実用スキルなので少し高め（50 SATS または Faucetチケット2枚）
-    const requirements = [ { amount: 50, asset: "SATS" }, { amount: 2, asset: "FAUCET_CREDIT" } ];
+    // 💰 料金設定: 実用スキルなので少し高め
+    const requirements = [ { amount: 50, asset: "SATS" }, { amount: 2, asset: "FAUCET_CREDIT" }, { amount: 2, asset: "GRANT_CREDIT" } ];
     const authResult = await payment402.verify(c.req.raw, requirements as any);
 
     // ❌ 2. 決済検証・通報ロジック

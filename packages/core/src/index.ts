@@ -7,12 +7,18 @@ export interface VerifyResult {
         settledAmount: number;
         asset: string;
         receiptId: string;
+        // --- Grant拡張 ---
+        issuer?: string;
+        grantId?: string;
+        grantType?: string;
+        scope?: any;
     };
     error?: string;
 }
 
 export interface PaymentVerifier {
-    canHandle(req: any): boolean;
+    // ボディ（paymentOverride）を安全にパースするため Promise を許容
+    canHandle(req: any): boolean | Promise<boolean>;
     verify(req: any): Promise<VerifyResult>;
     getChallengeContext(): Record<string, any>;
 }
@@ -55,7 +61,7 @@ export class Payment402 {
         let authResult: VerifyResult = { isValid: false, error: "No valid payment proof provided." };
 
         for (const verifier of this.verifiers) {
-            if (verifier.canHandle(req)) {
+            if (await verifier.canHandle(req)) {
                 authResult = await verifier.verify(req);
                 break;
             }
