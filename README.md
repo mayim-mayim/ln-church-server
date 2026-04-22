@@ -3,12 +3,12 @@
 > **Reference benchmark provider starter for agent-facing 402 APIs.**
 > AIエージェントが「支払いと実行の整合性」を検証するための、公開評価可能性（Public Evaluability）を備えた参照ノード・スターターキットです。
 
-This repository is NOT just a paywall template. It is a **reference benchmark surface** designed for the modern agentic economy. By deploying this stack, you provide a stable environment where AI agents can execute the `Probe → Pay → Execute → Trace` loop with deterministic benchmark responses for runtime validation.
+This repository is NOT just a paywall template. It is a **provider-side reference benchmark surface** designed for the modern agentic economy. By deploying this stack, you provide a stable environment where AI agents can execute the `Probe → Pay → Execute → Trace` loop with **deterministic benchmark outcomes** for public runtime validation.
 
 **This server now supports both direct HTTP 402 settlement and trusted sponsor-funded grant overrides through the same execution surface.**
 
 ## 🌟 Core Value: Public Evaluability
-For an autonomous agent to trust and use a paid API, it must first validate the provider's runtime. Monzenmachi focuses on providing **deterministic benchmark outcomes** that allow buyer-side runtimes to verify the 402 handshake, replay protection, and payload integrity before committing to complex computational tasks.
+For an autonomous agent to trust and use a paid API, it must first validate the provider's runtime. Monzenmachi focuses on providing deterministic benchmark outcomes that allow buyer-side runtimes to verify the 402 handshake, replay protection, and payload integrity before committing to complex computational tasks.
 
 * **Reference Provider Surface**: A deployable standard for agent-facing 402 endpoints.
 * **Buyer-side Runtime Validation**: Built-in endpoints to verify the payment protocol stack.
@@ -80,6 +80,17 @@ This is **not** a replacement for direct x402/L402/MPP settlement. It is an expe
 
 ---
 
+## What You Get After Deployment
+
+After deployment, an AI agent should be able to:
+1. Call `GET /api/agent/benchmark/ping` to validate the 402 handshake.
+2. Call `POST /api/agent/benchmark/echo` to verify payload integrity and retry behavior.
+3. Call a paid skill endpoint and receive a normal execution receipt.
+
+This starter is for exposing a trustworthy benchmark surface before serving higher-value paid computation.
+
+---
+
 ## 🚀 Quickstart
 
 ### 1. Environment Setup
@@ -111,8 +122,9 @@ npm run deploy
 
 ---
 
-## ⛩️ 4. Shrine Network Participation (Opt-in)
-If you wish to make your node discoverable by the global agent network, you can voluntarily participate in the Shrine network.
+## 4. Optional Public Discovery (Shrine Network, Opt-in)
+
+Your node can remain fully autonomous even without joining this network. Joining the Shrine network is an optional public discovery layer, not a requirement. The benchmark/provider runtime and discovery participation should be thought of as entirely separate.
 
 1. **Join Request**: Execute `POST /api/agent/network/join` to notify the Main Shrine.
 2. **Sanctification**: The "Holy Inquisitor" will visit your benchmark endpoints to verify protocol compliance.
