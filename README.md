@@ -1,142 +1,108 @@
-# ⛩️ Monzenmachi Benchmark Provider Starter
+# ln-church-server: Benchmark Provider Starter
 
-> **Reference benchmark provider starter for agent-facing 402 APIs.**
-> AIエージェントが「支払いと実行の整合性」を検証するための、公開評価可能性（Public Evaluability）を備えた参照ノード・スターターキットです。
+A reference benchmark provider starter for agent-facing **HTTP 402** APIs. 
+Designed to power **Public Evaluability** inside an **Agentic Payment Sandbox**, this server enables AI agents to seamlessly execute the `Probe → Pay → Execute → Trace` loop against your infrastructure.
 
-This repository is NOT just a paywall template. It is a **provider-side reference benchmark surface** designed for the modern agentic economy. By deploying this stack, you provide a stable environment where AI agents can execute the `Probe → Pay → Execute → Trace` loop with **deterministic benchmark outcomes** for public runtime validation.
+Designed around `x402`, `L402`, and `MPP`-compatible payment flows.
+---
 
-**This server now supports both direct HTTP 402 settlement and trusted sponsor-funded grant overrides through the same execution surface.**
+## ⚡ Start in 5 Minutes
 
-## 🌟 Core Value: Public Evaluability
-For an autonomous agent to trust and use a paid API, it must first validate the provider's runtime. Monzenmachi focuses on providing deterministic benchmark outcomes that allow buyer-side runtimes to verify the 402 handshake, replay protection, and payload integrity before committing to complex computational tasks.
+Deploying this starter provides a deterministic benchmark surface that buyer-side AI agents can use to validate your provider runtime.
 
-* **Reference Provider Surface**: A deployable standard for agent-facing 402 endpoints.
-* **Buyer-side Runtime Validation**: Built-in endpoints to verify the payment protocol stack.
-* **Standard Protocols**: Compliant with L402, IETF MPP draft, and x402 Foundation standard headers.
-* **Network Participation is Optional**: Operates as a fully autonomous benchmark node by default.
+### 1. Install & Run Locally
+```bash
+cd examples/hono-app
+npm install
+
+# Set up local secrets (.dev.vars)
+echo "FAUCET_SECRET=your-secret" > .dev.vars
+echo "MACAROON_SECRET=your-secret" >> .dev.vars
+
+# Start the dev server
+npm run dev
+```
+
+### 2. Test the Benchmark Surface
+AI agents can immediately hit your benchmark endpoints to verify the 402 handshake and payload integrity.
+
+```bash
+# 1. Ping test (Validates connectivity & 402 handshake)
+curl -X GET http://localhost:8787/api/agent/benchmark/ping
+
+# 2. Echo test (Validates POST payload integrity & retry logic)
+curl -X POST http://localhost:8787/api/agent/benchmark/echo \
+  -H "Content-Type: application/json" \
+  -d '{"message": "hello agentic web"}'
+```
+*Both endpoints will return an HTTP 402 Payment Required challenge. Once paid via a compatible client, they return deterministic validation data.*
 
 ---
 
-## 🤖 1. Reference Benchmark Suite
-Before serving complex skills, a provider must prove its protocol reliability. These endpoints provide deterministic responses and are optimized for machine-facing runtime interop testing.
+## 🧠 Why this is not just a paywall template
+
+To participate in the agentic economy, a provider must prove its API is reliable *before* agents commit funds to expensive computational tasks. This server is structured specifically for that purpose.
+
+* **Deterministic Benchmark Surface**: Provides built-in, predictable endpoints strictly for AI agents to test protocol compliance.
+* **Buyer-Side Runtime Validation**: Allows agents to verify replay protection, receipt generation, and signature integrity against your server.
+* **Benchmark First, Skill Second**: Architecture physically separates the benchmark validation layer from your actual computational skills.
+* **Unified Execution Surface**: Handles both direct HTTP 402 settlement and trusted grant overrides through the same execution pipeline.
+
+---
+
+## 🤖 Reference Benchmark Suite
+
+These endpoints are the core of **Public Evaluability**. They exist purely for machine-facing runtime interop testing.
 
 * **`GET /api/agent/benchmark/ping`**
-    - **Purpose**: Minimal paid GET for connectivity and 402 handshake testing.
-    - **Price**: 10 SATS / 1 Faucet Credit / 1 Grant Credit (if valid and in scope)
+  * **Role**: Minimal paid GET for connectivity and 402 HTTP header handshake testing.
+  * **Price**: 10 SATS / 1 Faucet Credit
 * **`POST /api/agent/benchmark/echo`**
-    - **Purpose**: Validates payload integrity and POST-retry logic. Returns the input text and its metadata.
-    - **Price**: 10 SATS / 1 Faucet Credit / 1 Grant Credit (if valid and in scope)
+  * **Role**: Validates POST payload integrity and 402-retry behavior. Reflects the input text alongside execution metadata.
+  * **Price**: 10 SATS / 1 Faucet Credit
 
-## 🛠️ 2. Computational Skill Catalog
-On top of the benchmark layer, you can host specialized computational skills. This kit includes example "ritual" skills to demonstrate asset-based pricing.
+---
+
+## 🛠️ Computational Skill Catalog
+
+Once your benchmark layer proves your protocol reliability, you can confidently serve complex, higher-value computational skills on top of it. This kit includes example skills to demonstrate asset-based pricing:
 
 * **`POST /api/agent/omikuji`**: A randomized oracle service (10 SATS).
-* **`POST /api/agent/json-repair`**: High-value algorithmic repair service for mangled JSON (50 SATS).
+* **`POST /api/agent/json-repair`**: Algorithmic repair service for mangled LLM JSON outputs (50 SATS).
 * **`POST /api/agent/compressor`**: Smart token-reduction service for LLM context optimization (30 SATS).
 
 ---
 
-## 🎟️ 3. Sponsored Grant Override (Experimental)
+## 💳 Payment Paths
 
-In addition to direct HTTP 402 settlement (x402, L402, MPP), `ln-church-server` can accept a **signed, scoped, single-use grant override** as a pre-payment access path.
+This server supports two distinct access models through a single, unified execution surface.
 
-This mechanism is designed for **sponsor-funded access experiments** in A2A markets, where an agent may execute before direct settlement by presenting a trusted grant token.
+### 1. Direct HTTP 402 Settlement (Canonical Path)
+The primary machine-to-machine payment path for direct settlement.
+* **Supported Protocols**: `x402` (EVM), `L402` (Lightning), `MPP` (Machine Payment Protocol draft).
+* **Behavior**: Rejects unauthorized requests with `402 Payment Required`, validates incoming cryptographic proofs, and stores receipts via Cloudflare KV for strict replay protection.
 
-### Core Properties
-- **Transport**: `paymentOverride.type = "grant"` with `asset = "GRANT_CREDIT"`
-- **Token Format**: JWS
-- **Key Distribution**: JWKS with `kid` support
-- **Signature Support**: Ed25519 / OKP
-- **Validation**:
-  - Trusted issuer check
-  - Audience check
-  - Route/method scope check
-  - Canonical agent ID binding
-  - Single-use / replay protection
-
-### Positioning
-This is **not** a replacement for direct x402/L402/MPP settlement. It is an experimental **pre-payment distribution layer** that feeds into the same paid execution runtime.
-
-### Important Boundary
-`ln-church-server` does **not** assume LN Church as the only issuer. Any trusted issuer may be accepted if its keys are resolvable and its grants satisfy the server's verification policy.
-
-### Example: Grant Override Request
-
-```json
-{
-  "agentId": "0x1234...",
-  "clientType": "AI",
-  "scheme": "L402",
-  "asset": "SATS",
-  "paymentOverride": {
-    "type": "grant",
-    "proof": "<JWS_GRANT_TOKEN>",
-    "asset": "GRANT_CREDIT"
-  }
-}
-```
-
-*If the grant is valid for the route, method, audience, and canonical agent ID, the server will unlock the paid endpoint and return a normal execution receipt.*
+### 2. Sponsored Grant Override (Onboarding Layer)
+An experimental pre-payment access path for sponsor-funded execution.
+* **Role**: This is **not** a replacement for direct 402 settlement. It is an onboarding/distribution layer allowing agents to execute tasks by presenting a trusted, single-use grant token (JWS) before utilizing direct settlement.
+* **Validation**: Strictly verifies issuer trust, audience, route/method scope, and canonical agent ID binding.
 
 ---
 
-## What You Get After Deployment
+## 🌍 Where this fits in the ecosystem
 
-After deployment, an AI agent should be able to:
-1. Call `GET /api/agent/benchmark/ping` to validate the 402 handshake.
-2. Call `POST /api/agent/benchmark/echo` to verify payload integrity and retry behavior.
-3. Call a paid skill endpoint and receive a normal execution receipt.
+* **Buyer-Side Runtime**: [`ln-church-agent`](https://github.com/mayim-mayim/ln-church-agent) (The Python SDK agents use to navigate 402 paywalls).
+* **Provider-Side Starter**: `ln-church-server` (This repository, providing the benchmark surface).
+* **Public Discovery / Sandbox**: **LN Church** (The public Agentic Payment Sandbox that can index, verify, and benchmark participating nodes running this provider stack).
 
-This starter is for exposing a trustworthy benchmark surface before serving higher-value paid computation.
-
----
-
-## 🚀 Quickstart
-
-### 1. Environment Setup
-Clone the repository and install dependencies.
-
-```bash
-cd examples/hono-app
-npm install
-```
-
-### 2. Configuration & Bindings
-Create a `.dev.vars` file in `examples/hono-app/` for local secrets. Ensure your `wrangler.toml` includes a `RECEIPT_KV` binding for replay protection.
-
-```text
-# .dev.vars
-FAUCET_SECRET="your-local-test-faucet-secret"
-MACAROON_SECRET="your-local-test-macaroon-secret"
-```
-
-### 3. Deployment
-```bash
-# Set secrets on production
-npx wrangler secret put FAUCET_SECRET
-npx wrangler secret put MACAROON_SECRET
-
-# Deploy to the edge
-npm run deploy
-```
+*Note: Joining the public LN Church discovery network (`/api/agent/network/join`) is entirely optional. Your server operates as a fully autonomous benchmark node by default.*
 
 ---
-
-## 4. Optional Public Discovery (Shrine Network, Opt-in)
-
-Your node can remain fully autonomous even without joining this network. Joining the Shrine network is an optional public discovery layer, not a requirement. The benchmark/provider runtime and discovery participation should be thought of as entirely separate.
-
-1. **Join Request**: Execute `POST /api/agent/network/join` to notify the Main Shrine.
-2. **Sanctification**: The "Holy Inquisitor" will visit your benchmark endpoints to verify protocol compliance.
-3. **Public Metrics**: Once verified, your node and skill catalog will be listed in the global discovery API.
-
----
-
-## 🤝 Ecosystem: Official SDK
-To ensure seamless integration for your customers (AI agents), recommend the official Python client:  
-👉 **[ln-church-agent (Python 402 Client SDK)](https://github.com/mayim-mayim/ln-church-agent)**
 
 ## 🛡️ Security: Replay Protection
-This kit implements an edge-native `ReceiptStore` using **Cloudflare KV**. Every payment receipt is checked and stored to prevent double-spending and replay attacks, ensuring your computational resources are never consumed for free.
 
----
+This kit includes an edge-native `ReceiptStore` implementation backed by **Cloudflare KV**. Every payment receipt is cryptographically checked and stored to prevent double-spending and replay attacks, ensuring your computational resources are never consumed for free.
+
+
+## License
+MIT
