@@ -23,11 +23,11 @@ describe('System Routes Integration (Benchmark-First)', () => {
         expect(json.next_action.capabilities[0].name).toBe('benchmark_ping');
     });
 
-    test('Manifest exposes benchmark_provider role and version 1.4.0', async () => {
+    test('Manifest exposes benchmark_provider role and version 1.6.0', async () => {
         const res = await systemApp.request(new Request('http://localhost/manifest'), undefined, mockEnv);
         const json = await res.json();
         
-        expect(json.version).toBe("1.5.0");
+        expect(json.version).toBe("1.6.0");
         expect(json.node_role).toBe("benchmark_provider");
         expect(json.public_evaluability).toBe(true);
         expect(json.benchmark_suite.endpoints[0].scenario).toBe("ping-v1");

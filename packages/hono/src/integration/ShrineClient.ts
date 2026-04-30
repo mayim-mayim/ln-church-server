@@ -1,6 +1,42 @@
 // src/integration/ShrineClient.ts
 import { MONZEN_CONFIG } from '../core/config';
 
+// ★ 新規追加: InteropCorpusItem の型定義
+export interface InteropCorpusItem {
+    corpus_id: string;
+    schema_version: "interop_corpus_item.v1";
+    source_observation_id?: string;
+    source_run_id?: string;
+    observed_at?: string;
+    quality?: "strong" | "weak" | "diagnostic" | "invalid";
+    target?: {
+        host?: string;
+        url?: string;
+        scenario_id?: string;
+    };
+    protocol?: {
+        rail?: string;
+        authorization_scheme?: string;
+        payment_intent?: string;
+        payment_method?: string;
+        draft_shape?: string;
+    };
+    challenge_shape?: {
+        request_b64_present?: boolean;
+        decoded_request_valid?: boolean;
+        credential_shape?: string;
+    };
+    expected_client_behavior?: {
+        action: "pay_and_verify" | "observe_only" | "stop_safely" | "reject_invalid";
+        reason?: string;
+    };
+    verification?: {
+        canonical_hash_matched?: boolean;
+        payment_receipt_present?: boolean;
+        status_code_after_payment?: number;
+    };
+}
+
 export class ShrineClient {
     private mainShrineUrl: string;
     private myNodeDomain: string;
@@ -92,6 +128,25 @@ export class ShrineClient {
         } catch (error) {
             console.error(`[ShrineClient] Failed to fetch blacklist:`, error);
             return [];
+        }
+    }
+
+    /**
+     * ⛩️ 本殿から Corpus Item を取得する
+     */
+    async fetchCorpusItem(corpusId: string): Promise<InteropCorpusItem | null> {
+        const url = `${this.mainShrineUrl}/api/agent/sandbox/interop/corpus/${corpusId}`;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) {
+                if (res.status !== 404) console.warn(`[ShrineClient] Corpus API returned ${res.status}`);
+                return null;
+            }
+            const data = await res.json() as any;
+            return data.item || null;
+        } catch (error) {
+            console.error(`[ShrineClient] Failed to fetch corpus item:`, error);
+            return null;
         }
     }
 }

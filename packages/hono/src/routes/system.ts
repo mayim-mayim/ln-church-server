@@ -46,7 +46,8 @@ systemApp.post('/network/join', async (c) => {
         manifestUrl: `https://${c.env.MY_NODE_DOMAIN}/api/agent/manifest`,
         benchmark_suite: [
             "/api/agent/benchmark/ping",
-            "/api/agent/benchmark/echo"
+            "/api/agent/benchmark/echo",
+            "/api/agent/benchmark/replay/{corpus_id}"
         ],
         skill_endpoints: [
             "/api/agent/omikuji",
@@ -54,7 +55,7 @@ systemApp.post('/network/join', async (c) => {
             "/api/agent/compressor"
         ],
         supported_assets: ["SATS", "FAUCET_CREDIT", "GRANT_CREDIT"],
-        version: "1.5.0"
+        version: "1.6.0"
     }));
 
     return c.json({
@@ -70,20 +71,22 @@ systemApp.get('/manifest', (c) => {
         node_name: "Monzenmachi Outpost",
         node_role: "benchmark_provider",
         public_evaluability: true,
-        version: "1.5.0",
+        version: "1.6.0",
         description: "A reference L402-protected benchmark node and computational skill provider.",
         benchmark_suite: {
             namespace: "/api/agent/benchmark",
             version: "1.0.0",
             endpoints: [
                 { path: "/ping", method: "GET", purpose: "benchmark", scenario: "ping-v1", deterministic: true },
-                { path: "/echo", method: "POST", purpose: "benchmark", scenario: "echo-v1", deterministic: true }
+                { path: "/echo", method: "POST", purpose: "benchmark", scenario: "echo-v1", deterministic: true },
+                { path: "/replay/{corpus_id}", method: "GET", purpose: "interop_corpus_replay", replay_type: "synthetic_from_corpus_v1" }
             ]
         },
         capabilities: [
             { id: "omikuji", path: "/api/agent/omikuji", method: "POST", price_estimate: "10 SATS" },
             { id: "json-repair", path: "/api/agent/json-repair", method: "POST", price_estimate: "50 SATS" },
-            { id: "compressor", path: "/api/agent/compressor", method: "POST", price_estimate: "30 SATS" }
+            { id: "compressor", path: "/api/agent/compressor", method: "POST", price_estimate: "30 SATS" },
+            { id: "corpus-replay", path: "/api/agent/benchmark/replay/{corpus_id}", method: "GET", purpose: "interop_corpus_replay", replay_type: "synthetic_from_corpus_v1" }
         ],
         network_participation: {
             status: "opt-in",

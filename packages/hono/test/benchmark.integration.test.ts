@@ -1,6 +1,19 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
 import benchmarkApp from '../src/routes/benchmark';
 import { FaucetVerifier } from '@ln-church/verifier-faucet';
+
+const mockEnv = {
+    FAUCET_SECRET: 'test-faucet-secret',
+    TEST_GRANT_SECRET: 'test-secret-key',
+    TRUSTED_GRANT_ISSUERS: 'https://trusted-issuer.example.com', 
+    MACAROON_SECRET: 'test-macaroon-secret',
+    RECEIPT_KV: {
+        get: async () => null,
+        put: async () => undefined
+    } as any,
+    MAIN_SHRINE_URL: 'http://mock-shrine.com',
+    MY_NODE_DOMAIN: 'mock-node.com'
+};
 
 // JWS生成ヘルパー
 async function createMockGrant(claims: any, secret: string) {
@@ -130,5 +143,96 @@ describe('Benchmark Suite Integration', () => {
         
         expect(res.status).toBe(200);
         expect(json.result.text).toBe("benchmark-grant-test");
+    });
+});
+
+describe('Corpus Replay Endpoints (Synthetic)', () => {
+
+    let originalFetch: typeof globalThis.fetch;
+
+    beforeAll(() => {
+        originalFetch = globalThis.fetch;
+    });
+
+    afterAll(() => {
+        globalThis.fetch = originalFetch;
+    });
+
+    test('GET /replay/:corpus_id returns descriptor safely if Shrine returns 500', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+        const res = await benchmarkApp.request(new Request('http://localhost/replay/corp_missing'), undefined, mockEnv);
+        expect(res.status).toBe(404);
+    });
+
+    test('GET /replay/:corpus_id returns valid descriptor', async () => {
+        const mockCorpus = {
+            corpus_id: "corp_123",
+            protocol: { payment_intent: "charge" },
+            expected_client_behavior: { action: "pay_and_verify" }
+        };
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true, json: async () => ({ item: mockCorpus })
+        });
+
+        const res = await benchmarkApp.request(new Request('http://localhost/replay/corp_123'), undefined, mockEnv);
+        const json = await res.json();
+        
+        expect(res.status).toBe(200);
+        expect(json.replay_type).toBe("synthetic_from_corpus_v1");
+        expect(json.expected_client_behavior.action).toBe("pay_and_verify");
+    });
+
+    test('GET /replay/:corpus_id/challenge returns strong pay_and_verify (402 challenge)', async () => {
+        const mockCorpus = {
+            corpus_id: "corp_strong",
+            quality: "strong",
+            protocol: { authorization_scheme: "L402", payment_intent: "charge" },
+            expected_client_behavior: { action: "pay_and_verify" }
+        };
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true, json: async () => ({ item: mockCorpus })
+        });
+
+        const res = await benchmarkApp.request(new Request('http://localhost/replay/corp_strong/challenge'), undefined, mockEnv);
+        const json = await res.json();
+
+        expect(res.status).toBe(402);
+        expect(res.headers.get('WWW-Authenticate')).toContain('L402 macaroon');
+        expect(json.expected_client_behavior.action).toBe("pay_and_verify");
+    });
+
+    test('GET /replay/:corpus_id/challenge returns stop_safely for session intent', async () => {
+        const mockCorpus = {
+            corpus_id: "corp_session",
+            quality: "strong", // quality より intent が優先される
+            protocol: { payment_intent: "session" },
+            expected_client_behavior: { action: "stop_safely" }
+        };
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true, json: async () => ({ item: mockCorpus })
+        });
+
+        const res = await benchmarkApp.request(new Request('http://localhost/replay/corp_session/challenge'), undefined, mockEnv);
+        const json = await res.json();
+
+        expect(res.status).toBe(402);
+        expect(json.expected_client_behavior.action).toBe("stop_safely");
+    });
+
+    test('GET /replay/:corpus_id/challenge returns reject_invalid for invalid corpus (422)', async () => {
+        const mockCorpus = {
+            corpus_id: "corp_invalid",
+            quality: "invalid",
+            expected_client_behavior: { action: "reject_invalid" }
+        };
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true, json: async () => ({ item: mockCorpus })
+        });
+
+        const res = await benchmarkApp.request(new Request('http://localhost/replay/corp_invalid/challenge'), undefined, mockEnv);
+        const json = await res.json();
+
+        expect(res.status).toBe(422);
+        expect(json.expected_client_behavior.action).toBe("reject_invalid");
     });
 });

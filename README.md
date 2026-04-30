@@ -60,6 +60,32 @@ These endpoints are the core of **Public Evaluability**. They exist purely for m
 * **`POST /api/agent/benchmark/echo`**
   * **Role**: Validates POST payload integrity and 402-retry behavior. Reflects the input text alongside execution metadata.
   * **Price**: 10 SATS / 1 Faucet Credit
+* **`GET /api/agent/benchmark/replay/{corpus_id}`**
+  * **Role**: Returns a synthetic replay descriptor derived from LN Church Interop Corpus.
+  * **Purpose**: Lets agents validate whether their parser and behavior selection match previously observed protocol shapes.
+  * **Replay Type**: `synthetic_from_corpus_v1`.
+* **`GET /api/agent/benchmark/replay/{corpus_id}/challenge`**
+  * **Role**: Emits a synthetic 402 challenge generated from corpus metadata.
+  * **Expected behaviors**: `pay_and_verify`, `observe_only`, `stop_safely`, or `reject_invalid`.
+
+---
+
+### Synthetic Corpus Replay
+
+The server can expose LN Church Interop Corpus items as synthetic benchmark replays.
+
+This allows buyer-side agents to validate whether their parser and decision engine handle previously observed protocol shapes correctly.
+
+**Endpoints:**
+- `GET /api/agent/benchmark/replay/{corpus_id}`
+  - Returns a replay descriptor derived from an Interop Corpus item.
+- `GET /api/agent/benchmark/replay/{corpus_id}/challenge`
+  - Returns a synthetic 402 challenge generated from corpus metadata.
+
+**Important:**
+This is not raw wire-level replay.  
+The replay type is `synthetic_from_corpus_v1`.  
+It is designed for parser and behavior validation, not real settlement execution.
 
 ---
 

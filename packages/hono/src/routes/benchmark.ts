@@ -1,11 +1,14 @@
 import { Hono } from 'hono';
 import type { KVNamespace } from '@cloudflare/workers-types';
 import { getPayment402 } from '../core/payment';
+import { ShrineClient } from '../integration/ShrineClient';
 
 type Bindings = {
     FAUCET_SECRET: string;
     MACAROON_SECRET: string;
     RECEIPT_KV: KVNamespace;
+    MAIN_SHRINE_URL: string;
+    MY_NODE_DOMAIN: string;
 };
 
 const benchmarkApp = new Hono<{ Bindings: Bindings }>();
@@ -65,6 +68,97 @@ benchmarkApp.post('/echo', async (c) => {
         },
         deterministic: true
     }, 200, p402.buildSuccessReceiptHeaders(receiptToken));
+});
+
+/**
+ * C. GET /replay/:corpus_id
+ * 本殿から Corpus Item を取得し、descriptor として返す (無料)
+ * ※ raw exact replay ではなく synthetic replay from corpus v1
+ */
+benchmarkApp.get('/replay/:corpus_id', async (c) => {
+    const corpusId = c.req.param('corpus_id');
+    const shrineClient = new ShrineClient(c.env.MAIN_SHRINE_URL, c.env.MY_NODE_DOMAIN);
+    
+    const corpusItem = await shrineClient.fetchCorpusItem(corpusId);
+    if (!corpusItem) {
+        return c.json({ status: "error", message: "Corpus item not found or Main Shrine unreachable." }, 404);
+    }
+
+    return c.json({
+        status: "ok",
+        schema_version: "server_replay_descriptor.v1",
+        replay_type: "synthetic_from_corpus_v1", // 明示: synthetic
+        corpus_id: corpusItem.corpus_id,
+        source_observation_id: corpusItem.source_observation_id,
+        protocol: corpusItem.protocol,
+        expected_client_behavior: corpusItem.expected_client_behavior,
+        endpoints: {
+            challenge: `/api/agent/benchmark/replay/${corpusId}/challenge`
+        }
+    });
+});
+
+/**
+ * D. GET /replay/:corpus_id/challenge
+ * Corpus のメタデータから合成された (synthetic) チャレンジを返す
+ */
+benchmarkApp.get('/replay/:corpus_id/challenge', async (c) => {
+    const corpusId = c.req.param('corpus_id');
+    const shrineClient = new ShrineClient(c.env.MAIN_SHRINE_URL, c.env.MY_NODE_DOMAIN);
+    
+    const corpusItem = await shrineClient.fetchCorpusItem(corpusId);
+    if (!corpusItem) {
+        return c.json({ status: "error", message: "Corpus item not found or Main Shrine unreachable." }, 404);
+    }
+
+    const intent = corpusItem.protocol?.payment_intent;
+    const quality = corpusItem.quality;
+    const scheme = corpusItem.protocol?.authorization_scheme || "Payment";
+
+    const baseResponseBody = {
+        replay_type: "synthetic_from_corpus_v1",
+        corpus_id: corpusItem.corpus_id,
+        expected_client_behavior: corpusItem.expected_client_behavior
+    };
+
+    // 1. payment_intent=session の場合
+    if (intent === "session") {
+        return c.json(baseResponseBody, 402, {
+            'WWW-Authenticate': 'Payment invoice="<fetch-via-hateoas>", charge="<fetch-via-hateoas>"',
+            'PAYMENT-REQUIRED': 'network="lightning", amount="10", asset="SATS"'
+        });
+    }
+
+    // 2. quality=invalid の場合
+    if (quality === "invalid") {
+        // reject_invalid のため、422 Unprocessable Entity 等を返す
+        return c.json(baseResponseBody, 422);
+    }
+
+    // 3. quality=weak or diagnostic の場合
+    if (quality === "weak" || quality === "diagnostic") {
+        // observe_only: チャレンジは返す
+        return c.json(baseResponseBody, 402, {
+            'WWW-Authenticate': `${scheme} invoice="<fetch-via-hateoas>"`,
+            'PAYMENT-REQUIRED': 'network="lightning", amount="10", asset="SATS"'
+        });
+    }
+
+    // 4. quality=strong の場合
+    if (quality === "strong") {
+        let authHeader = 'Payment invoice="<fetch-via-hateoas>", charge="<fetch-via-hateoas>"';
+        if (scheme.toUpperCase() === 'L402') {
+            authHeader = 'L402 macaroon="<synthetic_macaroon_placeholder>", invoice="<fetch-via-hateoas>"';
+        }
+
+        return c.json(baseResponseBody, 402, {
+            'WWW-Authenticate': authHeader,
+            'PAYMENT-REQUIRED': 'network="lightning", amount="10", asset="SATS"'
+        });
+    }
+
+    // Fallback
+    return c.json(baseResponseBody, 402);
 });
 
 export default benchmarkApp;

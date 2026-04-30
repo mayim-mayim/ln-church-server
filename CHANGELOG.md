@@ -2,6 +2,12 @@
 
 All notable changes to the `@ln-church/server` and Monzenmachi Hono Starter Kit will be documented in this file.
 
+## [1.6.0] - 2026-04-30 (Synthetic Corpus Replay Integration)
+
+* **Corpus Replay Endpoint**: Added `GET /api/agent/benchmark/replay/:corpus_id` and `/challenge` endpoints to the benchmark suite. This allows agents to perform buyer-side runtime validation against synthetic challenges generated from the Main Shrine's observed interop corpus.
+* **ShrineClient Expansion**: Upgraded the internal `ShrineClient` to seamlessly fetch and parse `InteropCorpusItem` data from the Main Shrine.
+* **Manifest Capability Updated**: The benchmark provider manifest now publicly advertises the `corpus-replay` capability (`synthetic_from_corpus_v1`).
+
 ## [1.5.0] - 2026-04-21 (Universal Grant Authorization)
 
 * **Grant Verifier Introduced**: Added `@ln-church/verifier-grant` to support multi-tenant, issuer-open authorization models via signed JWS tokens.
