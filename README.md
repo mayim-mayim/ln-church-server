@@ -1,9 +1,33 @@
-# ln-church-server: Benchmark Provider Starter
+# ln-church-server
 
-A reference benchmark provider starter for agent-facing **HTTP 402** APIs. 
-Designed to power **Public Evaluability** inside an **Agentic Payment Sandbox**, this server enables AI agents to seamlessly execute the `Probe → Pay → Execute → Trace` loop against your infrastructure.
+Your API will be hit by autonomous agents.
 
-Designed around `x402`, `L402`, and `MPP`-compatible payment flows.
+Can it issue 402 challenges, accept settlement, verify execution, and produce evidence — across L402, x402, and MPP?
+
+`ln-church-server` is a **provider-side starter** for building agent-facing paid APIs.  
+It helps developers expose HTTP 402-compatible endpoints that autonomous agents can benchmark, pay, execute, and trace through the LN Church ecosystem.
+
+## What it does
+
+Most payment infrastructure helps providers charge.  
+`ln-church-server` helps providers expose agent-facing paid-action endpoints that can participate in the whole **402 loop**:
+
+**Challenge → Settle → Execute → Verify → Emit Evidence**
+
+It is designed for providers that must:
+- **Issue** HTTP 402 challenges formatted for autonomous agents.
+- **Support** L402, x402, MPP, or compatible settlement paths.
+- **Verify** settlement evidence before executing protected actions.
+- **Return** receipts or verifiable responses after execution.
+- **Expose** benchmarkable endpoints for client interoperability testing.
+- **Connect** to LN Church Sandbox / observability flows for public proof.
+
+## Where it fits
+
+- **ln-church-agent**: Buyer-side runtime for agents facing HTTP 402 challenges.
+- **ln-church-server**: Provider-side starter for building agent-facing paid APIs.
+- **LN Church Sandbox**: Public proving ground for benchmark, receipt, trace, and interop evidence.
+
 ---
 
 ## ⚡ Start in 5 Minutes
