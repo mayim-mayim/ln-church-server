@@ -7,6 +7,25 @@ Can it issue 402 challenges, accept settlement, verify execution, and produce ev
 `ln-church-server` is a **provider-side starter** for building agent-facing paid APIs.  
 It helps developers expose HTTP 402-compatible endpoints that autonomous agents can benchmark, pay, execute, and trace through the LN Church ecosystem.
 
+## Core Doctrine
+
+**Do not make agents spend tokens guessing how your paid API works.**
+
+`ln-church-server` exists to turn provider-side paid actions into deterministic, inspectable, and verifiable HTTP 402 surfaces.
+
+A provider should not expose a vague paywall that forces autonomous agents to guess:
+- how payment is challenged,
+- which rail is accepted,
+- how settlement is verified,
+- what action was executed,
+- or what evidence proves success.
+
+Instead, this starter structures the provider side as a clear machine-facing loop:
+
+**Challenge → Settle → Execute → Verify → Emit Evidence**
+
+---
+
 ## What it does
 
 Most payment infrastructure helps providers charge.  
