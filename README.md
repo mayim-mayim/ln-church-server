@@ -30,6 +30,17 @@ It is designed for providers that must:
 
 ---
 
+## 🧠 Why this is not just a paywall template
+
+To participate in the agentic economy, a provider must prove its API is reliable *before* agents commit funds to expensive computational tasks. This server is structured specifically for that purpose.
+
+* **Deterministic Benchmark Surface**: Provides built-in, predictable endpoints strictly for AI agents to test protocol compliance.
+* **Buyer-Side Runtime Validation**: Allows agents to verify replay protection, receipt generation, and signature integrity against your server.
+* **Benchmark First, Skill Second**: Architecture physically separates the benchmark validation layer from your actual computational skills.
+* **Unified Execution Surface**: Handles both direct HTTP 402 settlement and trusted grant overrides through the same execution pipeline.
+
+---
+
 ## ⚡ Start in 5 Minutes
 
 Deploying this starter provides a deterministic benchmark surface that buyer-side AI agents can use to validate your provider runtime.
@@ -60,17 +71,6 @@ curl -X POST http://localhost:8787/api/agent/benchmark/echo \
   -d '{"message": "hello agentic web"}'
 ```
 *Both endpoints will return an HTTP 402 Payment Required challenge. Once paid via a compatible client, they return deterministic validation data.*
-
----
-
-## 🧠 Why this is not just a paywall template
-
-To participate in the agentic economy, a provider must prove its API is reliable *before* agents commit funds to expensive computational tasks. This server is structured specifically for that purpose.
-
-* **Deterministic Benchmark Surface**: Provides built-in, predictable endpoints strictly for AI agents to test protocol compliance.
-* **Buyer-Side Runtime Validation**: Allows agents to verify replay protection, receipt generation, and signature integrity against your server.
-* **Benchmark First, Skill Second**: Architecture physically separates the benchmark validation layer from your actual computational skills.
-* **Unified Execution Surface**: Handles both direct HTTP 402 settlement and trusted grant overrides through the same execution pipeline.
 
 ---
 
@@ -134,8 +134,8 @@ The primary machine-to-machine payment path for direct settlement.
 
 ### 2. Sponsored Grant Override (Onboarding Layer)
 An experimental pre-payment access path for sponsor-funded execution.
-* **Role**: This is **not** a replacement for direct 402 settlement. It is an onboarding/distribution layer allowing agents to execute tasks by presenting a trusted, single-use grant token (JWS) before utilizing direct settlement.
-* **Validation**: Strictly verifies issuer trust, audience, route/method scope, and canonical agent ID binding.
+* **Role**: This is **not** a replacement for direct 402 settlement, nor is it a settlement rail. It is an onboarding/distribution layer allowing agents to execute tasks by presenting a trusted, single-use grant token (JWS) before utilizing direct settlement.
+* **Validation**: Strictly verifies issuer trust, audience, route/method scope, canonical agent ID binding, and payload semantics (e.g., `jti`, `GRANT_CREDIT`).
 
 ---
 

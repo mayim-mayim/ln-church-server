@@ -1,8 +1,6 @@
-// packages/hono/test/security.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
-import { checkBlacklist } from '../src/core/security';
-
+import { checkBlacklist } from '../../packages/hono/src/core/security';
 // fetch をモック化して、テスト中に本殿へ実際のHTTPリクエストが飛ばないようにする
 globalThis.fetch = vi.fn() as any;
 

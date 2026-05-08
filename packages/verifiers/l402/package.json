@@ -1,6 +1,6 @@
 {
   "name": "@ln-church/verifier-l402",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
@@ -10,5 +10,8 @@
     "@ln-church/server": "*",
     "macaroons.js": "^0.3.9"
   },
-  "scripts": { "build": "tsc" }
+  "scripts": { 
+    "build": "tsc",
+    "test": "vitest"
+  }
 }

@@ -5,6 +5,7 @@ export interface GrantClaims {
     sub: string;
     aud: string;
     jti: string;
+    nbf?: number;
     iat: number;
     exp: number;
     grant_type: string;
@@ -58,7 +59,7 @@ export class GrantVerifier implements PaymentVerifier {
     public getChallengeContext(): Record<string, any> {
         return {
             scheme: this.scheme,
-            guide: "Provide a valid Grant JWS token in paymentOverride.",
+            guide: "Provide a valid Grant JWS token in paymentOverride. Note: Grant is a pre-payment access verifier, not a settlement rail.",
             next_request_schema: {
                 paymentOverride: { type: "grant", proof: "<JWS_GRANT_TOKEN>", asset: "GRANT_CREDIT" }
             }
@@ -74,14 +75,21 @@ export class GrantVerifier implements PaymentVerifier {
             if (parts.length !== 3) throw new Error("Invalid JWS format.");
             const [headerB64, payloadB64, signatureB64] = parts;
 
-            // ★ 修正: JWSヘッダーもパースする
             const header = JSON.parse(new TextDecoder().decode(this.base64UrlToUint8Array(headerB64)));
             const claims: GrantClaims = JSON.parse(new TextDecoder().decode(this.base64UrlToUint8Array(payloadB64)));
 
-            // Time Validation
+            // Strict Validation
+            if (!claims.jti) throw new Error("Grant token missing jti.");
+            if (!claims.asset || claims.asset !== "GRANT_CREDIT") throw new Error("Grant asset must be GRANT_CREDIT.");
+            if (!claims.scope?.routes?.length) throw new Error("Grant route scope missing.");
+            if (!claims.scope?.methods?.length) throw new Error("Grant method scope missing.");
+            if (claims.nbf && claims.nbf > Math.floor(Date.now() / 1000)) throw new Error("Grant token not yet valid.");
+
+            // Time Validation (expの欠損チェックを追加)
+            if (!claims.exp) throw new Error("Grant token missing exp.");
             if (claims.exp < Math.floor(Date.now() / 1000)) throw new Error("Grant token expired.");
 
-            // ★ 修正: Agent Binding Validation (必須化)
+            // Agent Binding Validation
             let requestAgentId = typeof req.headers?.get === 'function' ? req.headers.get('x-agent-id') : null;
             if (!requestAgentId && typeof req.clone === 'function' && req.method !== 'GET' && req.method !== 'HEAD') {
                 try {
@@ -91,13 +99,13 @@ export class GrantVerifier implements PaymentVerifier {
                 } catch (e) {}
             }
             
-            // agentIdの提示がなければGrantは使えない
             if (!requestAgentId) {
                 throw new Error("Agent ID is required in header (x-agent-id) or body for grant authorization.");
             }
             if (requestAgentId !== claims.sub) {
                 throw new Error("Agent binding mismatch.");
             }
+
             // Trust Validation
             if (!this.options.trustedIssuers.includes(claims.iss)) throw new Error("Untrusted issuer.");
             if (claims.aud !== this.options.audience) throw new Error("Audience mismatch.");
@@ -134,7 +142,10 @@ export class GrantVerifier implements PaymentVerifier {
                     issuer: claims.iss,
                     grantId: claims.jti,
                     grantType: claims.grant_type,
-                    scope: claims.scope
+                    scope: claims.scope,
+                    accessPath: "sponsored_grant",
+                    authorizationArtifact: "scoped_grant",
+                    settlementRail: "none"
                 }
             };
 

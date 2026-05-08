@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { Payment402, PaymentRequirement } from '../src/index';
+import { Payment402, PaymentRequirement } from '../../packages/core/src/index';
 
 describe('Payment402 Canonical Provider Contract', () => {
     // モック用のVerifier（今回はヘッダーテストなので空でOK）

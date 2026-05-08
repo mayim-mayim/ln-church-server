@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
-import benchmarkApp from '../src/routes/benchmark';
+import benchmarkApp from '../../packages/hono/src/routes/benchmark';
 import { FaucetVerifier } from '@ln-church/verifier-faucet';
 
 const mockEnv = {

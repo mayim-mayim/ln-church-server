@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { FaucetVerifier } from '@ln-church/verifier-faucet';
 import { ShrineClient } from '../integration/ShrineClient';
+import { MONZEN_CONFIG } from '../core/config'; // ★ 追加
 
 type Bindings = {
     FAUCET_SECRET: string;
@@ -55,7 +56,7 @@ systemApp.post('/network/join', async (c) => {
             "/api/agent/compressor"
         ],
         supported_assets: ["SATS", "FAUCET_CREDIT", "GRANT_CREDIT"],
-        version: "1.6.0"
+        version: MONZEN_CONFIG.VERSION // ★ 修正
     }));
 
     return c.json({
@@ -71,7 +72,7 @@ systemApp.get('/manifest', (c) => {
         node_name: "Monzenmachi Outpost",
         node_role: "benchmark_provider",
         public_evaluability: true,
-        version: "1.6.0",
+        version: MONZEN_CONFIG.VERSION, 
         description: "A reference L402-protected benchmark node and computational skill provider.",
         benchmark_suite: {
             namespace: "/api/agent/benchmark",

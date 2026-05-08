@@ -1,6 +1,6 @@
 ﻿{
   "name": "@ln-church/hono",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
@@ -18,5 +18,9 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.0.0"
   },
-  "scripts": { "build": "tsc" }
+  "scripts": { 
+    "build": "tsc",
+    "test": "vitest"
+  }
+  
 }

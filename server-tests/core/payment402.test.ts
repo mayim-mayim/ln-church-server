@@ -1,6 +1,6 @@
 // packages/core/test/payment402.test.ts
 import { describe, it, expect, vi } from 'vitest';
-import { Payment402, PaymentVerifier, VerifyResult, ReceiptStore } from '../src/index';
+import { Payment402, PaymentVerifier, VerifyResult, ReceiptStore } from '@ln-church/server/src';
 
 describe('Payment402 Core Engine', () => {
     // 成功するモック検証器

@@ -1,4 +1,3 @@
-
 export interface VerifyResult {
     isValid: boolean;
     scheme?: string;
@@ -12,6 +11,9 @@ export interface VerifyResult {
         grantId?: string;
         grantType?: string;
         scope?: any;
+        accessPath?: "sponsored_grant" | string;
+        authorizationArtifact?: "scoped_grant" | string;
+        settlementRail?: "none" | string;
     };
     error?: string;
 }

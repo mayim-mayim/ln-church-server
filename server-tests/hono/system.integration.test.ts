@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'vitest';
-import systemApp from '../src/routes/system';
+import systemApp from '../../packages/hono/src/routes/system';
+import { MONZEN_CONFIG } from '../../packages/hono/src/core/config';
 
 describe('System Routes Integration (Benchmark-First)', () => {
-    // 略さずに全て記述します
     const mockEnv = {
         FAUCET_SECRET: 'test-faucet-secret',
         MACAROON_SECRET: 'test-macaroon-secret',
@@ -18,16 +18,17 @@ describe('System Routes Integration (Benchmark-First)', () => {
         const res = await systemApp.request(new Request('http://localhost/faucet', { method: 'POST' }), undefined, mockEnv);
         const json = await res.json();
         
-        // Next action が ping を最優先で案内しているか
         expect(json.next_action.instruction_for_agent).toContain('validate your 402 runtime');
         expect(json.next_action.capabilities[0].name).toBe('benchmark_ping');
     });
 
-    test('Manifest exposes benchmark_provider role and version 1.6.0', async () => {
+    // ★ テスト名も「現在のバージョン」と動的な表現に変更
+    test('Manifest exposes benchmark_provider role and current version', async () => {
         const res = await systemApp.request(new Request('http://localhost/manifest'), undefined, mockEnv);
         const json = await res.json();
         
-        expect(json.version).toBe("1.6.0");
+        // ★ ハードコードをやめ、MONZEN_CONFIG.VERSION と一致するかテストする
+        expect(json.version).toBe(MONZEN_CONFIG.VERSION);
         expect(json.node_role).toBe("benchmark_provider");
         expect(json.public_evaluability).toBe(true);
         expect(json.benchmark_suite.endpoints[0].scenario).toBe("ping-v1");

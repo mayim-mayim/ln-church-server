@@ -2,6 +2,17 @@
 
 All notable changes to the `@ln-church/server` and Monzenmachi Hono Starter Kit will be documented in this file.
 
+# Changelog
+
+All notable changes to the `@ln-church/server` and Monzenmachi Hono Starter Kit will be documented in this file.
+
+## [1.6.1] - 2026-05-08 (Sponsored Access Grant Semantics)
+
+* **Grant Semantics Alignment**: Clarified that Grant is a sponsor-issued scoped entitlement for pre-payment access, not a settlement rail.
+* **Strict Grant Validation**: Added strict checks for `jti`, `asset` (must be `GRANT_CREDIT`), `scope.routes`, `scope.methods`, and `nbf` in `@ln-church/verifier-grant`.
+* **Payload Extension**: `VerifyResult` payload now explicitly exposes `accessPath`, `authorizationArtifact`, and `settlementRail` to properly reflect the access nature.
+
+
 ## [1.6.0] - 2026-04-30 (Synthetic Corpus Replay Integration)
 
 * **Corpus Replay Endpoint**: Added `GET /api/agent/benchmark/replay/:corpus_id` and `/challenge` endpoints to the benchmark suite. This allows agents to perform buyer-side runtime validation against synthetic challenges generated from the Main Shrine's observed interop corpus.

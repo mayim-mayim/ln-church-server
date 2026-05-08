@@ -1,11 +1,12 @@
 {
   "name": "@ln-church/server",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest"
   },
   "files": [
     "dist",

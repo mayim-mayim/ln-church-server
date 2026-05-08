@@ -2,8 +2,9 @@
 import { Buffer } from 'node:buffer';
 import crypto from 'node:crypto';
 import { describe, test, expect, vi } from 'vitest';
-import omikujiApp from '../src/routes/skills/omikuji';
+import omikujiApp from '../../packages/hono/src/routes/skills/omikuji';
 import { FaucetVerifier } from '@ln-church/verifier-faucet';
+import { getPayment402 } from '../../packages/hono/src/core/payment';
 
 // 補助1: HMAC JWS生成ヘルパー
 async function createMockGrant(claims: any, secret: string) {
@@ -186,5 +187,27 @@ describe('Grant Verifier Integration (Omikuji)', () => {
         expect(res.status).toBe(200);
 
         globalThis.fetch = originalFetch; 
+    });
+
+    // 10. ★ 新規追加: セマンティクス（思想）の出力検証
+    test('Valid grant exposes sponsored access semantics', async () => {
+        const proof = await createMockGrant(validClaims, mockEnv.TEST_GRANT_SECRET);
+
+        const req = new Request('https://mock-node.com/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-agent-id': 'agent-007' },
+            body: JSON.stringify({
+                paymentOverride: { type: 'grant', proof, asset: 'GRANT_CREDIT' }
+            })
+        });
+
+        // 実際のPayment402エンジンを通して、payloadに期待するセマンティクスが含まれているか確認
+        const p402 = getPayment402({ env: mockEnv } as any);
+        const result = await p402.verify(req, [{ amount: 1, asset: 'GRANT_CREDIT' }]);
+
+        expect(result.isValid).toBe(true);
+        expect(result.payload?.accessPath).toBe('sponsored_grant');
+        expect(result.payload?.authorizationArtifact).toBe('scoped_grant');
+        expect(result.payload?.settlementRail).toBe('none');
     });
 });

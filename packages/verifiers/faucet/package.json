@@ -1,6 +1,6 @@
 {
   "name": "@ln-church/verifier-faucet",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
@@ -18,7 +18,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest"
   },
   "dependencies": {
     "@ln-church/server": "*"

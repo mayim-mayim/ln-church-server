@@ -1,6 +1,7 @@
 import { describe, test, expect, vi } from 'vitest';
-import omikujiApp from '../src/routes/skills/omikuji';
+import omikujiApp from '../../packages/hono/src/routes/skills/omikuji';
 import { FaucetVerifier } from '@ln-church/verifier-faucet';
+
 
 describe('Integration: Omikuji Route Provider Contract', () => {
     // Honoの c.env に渡される環境変数のモック
