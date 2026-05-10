@@ -6,6 +6,7 @@ Can it issue 402 challenges, accept settlement, verify execution, and produce ev
 
 `ln-church-server` is a **provider-side starter** for building agent-facing paid APIs.  
 It helps developers expose HTTP 402-compatible endpoints that autonomous agents can benchmark, pay, execute, and trace through the LN Church ecosystem.
+It is the seller-side counterpart to `ln-church-agent`: while the agent decides how to pay, the server makes paid API surfaces explicit, inspectable, and verifiable.
 
 ## Core Doctrine
 
@@ -43,9 +44,84 @@ It is designed for providers that must:
 
 ## Where it fits
 
-- **ln-church-agent**: Buyer-side runtime for agents facing HTTP 402 challenges.
-- **ln-church-server**: Provider-side starter for building agent-facing paid APIs.
-- **LN Church Sandbox**: Public proving ground for benchmark, receipt, trace, and interop evidence.
+`ln-church-server` is the provider-side counterpart to `ln-church-agent`.
+
+Together, they reduce the reasoning burden of autonomous agents around paid API execution:
+
+| Component | Role | Core responsibility |
+|---|---|---|
+| `ln-church-agent` | Buyer-side runtime | Decide whether and how an agent should pay, execute, and verify an HTTP 402 flow |
+| `ln-church-server` | Provider-side runtime | Expose paid API capabilities as agent-readable surfaces with challenge, execution, and evidence metadata |
+| LN Church Sandbox | Observability layer | Collect benchmark, receipt, trace, and interop evidence from both sides |
+
+In short:
+
+- `ln-church-agent` prevents agents from spending tokens figuring out how to pay.
+- `ln-church-server` prevents agents from spending tokens guessing how a paid API works.
+- LN Church Sandbox makes the resulting behavior observable and comparable.
+
+---
+
+## Agent-Readable Paid Surfaces
+
+As of v1.7.0, `ln-church-server` can expose provider capabilities as **agent-readable paid surfaces**.
+
+A paid surface is not just a paywall. It is a machine-readable contract that tells agents:
+
+- what endpoint is being sold,
+- which assets and settlement paths are accepted,
+- what behavior the client should take,
+- what schema the challenge body follows,
+- and what execution evidence will be returned after payment.
+
+Unpaid requests can return:
+
+```json
+{
+  "schema_version": "ln_church.paid_surface_challenge.v1",
+  "surface": {
+    "surface_id": "skill:json-repair:v1",
+    "resource": "/api/agent/json-repair",
+    "action_type": "json_repair",
+    "payment_intent": "charge"
+  },
+  "accepted_payments": [
+    {
+      "asset": "SATS",
+      "amount": 50,
+      "settlement_rail": "l402",
+      "access_path": "direct_settlement"
+    },
+    {
+      "asset": "GRANT_CREDIT",
+      "amount": 2,
+      "settlement_rail": "none",
+      "access_path": "sponsored_grant"
+    }
+  ],
+  "expected_client_behavior": {
+    "action": "pay_and_verify"
+  }
+}
+```
+
+Paid requests can return:
+
+```json
+{
+  "status": "success",
+  "result": "...",
+  "execution_receipt": {
+    "schema_version": "ln_church.execution_receipt.v1",
+    "surface_id": "skill:json-repair:v1",
+    "payment_status": "succeeded",
+    "execution_status": "completed",
+    "verification_status": "verified"
+  }
+}
+```
+
+This lets agents avoid spending reasoning tokens on payment mechanics and instead delegate repetitive interpretation to their runtime.
 
 ---
 
@@ -132,13 +208,24 @@ It is designed for parser and behavior validation, not real settlement execution
 
 ---
 
-## 🛠️ Computational Skill Catalog
+## 🛠️ Built-in Paid Surface Catalog
 
-Once your benchmark layer proves your protocol reliability, you can confidently serve complex, higher-value computational skills on top of it. This kit includes example skills to demonstrate asset-based pricing:
+The starter includes four agent-readable paid surfaces:
 
-* **`POST /api/agent/omikuji`**: A randomized oracle service (10 SATS).
-* **`POST /api/agent/json-repair`**: Algorithmic repair service for mangled LLM JSON outputs (50 SATS).
-* **`POST /api/agent/compressor`**: Smart token-reduction service for LLM context optimization (30 SATS).
+| Surface ID | Endpoint | Type | Deterministic | Purpose |
+|---|---|---:|---:|---|
+| `benchmark:ping:v1` | `GET /api/agent/benchmark/ping` | benchmark | yes | Minimal 402 handshake and receipt validation |
+| `skill:json-repair:v1` | `POST /api/agent/json-repair` | skill | yes | Repair malformed JSON into machine-readable output |
+| `skill:compressor:v1` | `POST /api/agent/compressor` | skill | yes | Compress text for downstream agent processing |
+| `skill:omikuji:v1` | `POST /api/agent/omikuji` | skill | no | Return a randomized paid result |
+
+Agents can discover these surfaces from:
+
+```bash
+GET /api/agent/manifest
+```
+
+The manifest includes `paid_surfaces`, accepted payment options, expected client behavior, and receipt schema metadata.
 
 ---
 

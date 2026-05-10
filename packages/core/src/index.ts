@@ -19,7 +19,6 @@ export interface VerifyResult {
 }
 
 export interface PaymentVerifier {
-    // ボディ（paymentOverride）を安全にパースするため Promise を許容
     canHandle(req: any): boolean | Promise<boolean>;
     verify(req: any): Promise<VerifyResult>;
     getChallengeContext(): Record<string, any>;
@@ -29,6 +28,123 @@ export interface PaymentRequirement {
     amount: number;
     asset: string;
 }
+
+// --- v1.7.0 Agent-Readable Paid Surface Types ---
+export type PaidSurfaceAction =
+  | "pay_and_verify"
+  | "observe_only"
+  | "stop_safely"
+  | "reject_invalid"
+  | "no_payment_required";
+
+export type PaymentIntent =
+  | "charge"
+  | "benchmark"
+  | "sponsored_access"
+  | "session"
+  | "observe_only";
+
+export type SettlementRail =
+  | "l402"
+  | "x402"
+  | "mpp"
+  | "faucet"
+  | "grant"
+  | "none"
+  | string;
+
+export type AccessPath =
+  | "direct_settlement"
+  | "sponsored_grant"
+  | "faucet"
+  | "test_grant"
+  | "none"
+  | string;
+
+export interface ExpectedClientBehavior {
+  action: PaidSurfaceAction;
+  reason?: string;
+}
+
+export interface EvidenceSchema {
+  schema_version?: string;
+  required: string[];
+  optional?: string[];
+}
+
+export interface PaidSurfaceMetadata {
+  surface_id?: string;
+  resource?: string;
+  action_type?: string;
+  payment_intent?: PaymentIntent;
+  settlement_rail?: SettlementRail;
+  access_path?: AccessPath;
+  deterministic?: boolean;
+  description?: string;
+  expected_client_behavior?: ExpectedClientBehavior;
+  evidence_schema?: EvidenceSchema;
+  input_schema?: Record<string, any>;
+  output_schema?: Record<string, any>;
+}
+
+export interface PaidSurfaceRequirement extends PaymentRequirement {
+  surface?: PaidSurfaceMetadata;
+}
+
+// --- v1.7.0 Execution Receipt Types ---
+export type PaymentStatus =
+  | "not_required"
+  | "pending"
+  | "succeeded"
+  | "failed"
+  | "sponsored"
+  | "unknown";
+
+export type ExecutionStatus =
+  | "not_started"
+  | "completed"
+  | "failed"
+  | "skipped";
+
+export type VerificationStatus =
+  | "pending"
+  | "verified"
+  | "failed"
+  | "not_applicable";
+
+export interface ExecutionReceipt {
+  schema_version: "ln_church.execution_receipt.v1";
+  trace_id: string;
+  surface_id?: string;
+  resource?: string;
+  action_type?: string;
+
+  payment_status: PaymentStatus;
+  execution_status: ExecutionStatus;
+  verification_status: VerificationStatus;
+
+  verification_method?: string;
+  proof_reference?: string;
+  recorded_hash?: string;
+  timestamp: string;
+
+  payment?: {
+    asset?: string;
+    amount?: number;
+    settlement_rail?: SettlementRail;
+    access_path?: AccessPath;
+    receipt_id?: string;
+  };
+
+  result?: {
+    deterministic?: boolean;
+    output_hash?: string;
+    output_schema?: Record<string, any>;
+  };
+
+  meta?: Record<string, any>;
+}
+// --- End v1.7.0 Types ---
 
 export interface ReceiptStore {
     checkAndStore(receiptId: string): Promise<boolean>;
@@ -48,6 +164,55 @@ export interface ReceiptHeaders extends Record<string, string> {
 export interface ChallengeOptions {
     scheme?: string;   // デフォルト: 'Payment'
     network?: string;  // デフォルト: 'lightning'
+}
+
+export interface BuildExecutionReceiptInput {
+    trace_id?: string;
+    requirement?: PaidSurfaceRequirement | PaymentRequirement;
+    authResult?: VerifyResult;
+  
+    payment_status?: PaymentStatus;
+    execution_status?: ExecutionStatus;
+    verification_status?: VerificationStatus;
+  
+    verification_method?: string;
+    proof_reference?: string;
+    recorded_hash?: string;
+  
+    result?: {
+        deterministic?: boolean;
+        output_hash?: string;
+        output_schema?: Record<string, any>;
+    };
+  
+    meta?: Record<string, any>;
+}
+
+export interface PaidSurfaceChallenge {
+    schema_version: "ln_church.paid_surface_challenge.v1";
+    error: "Payment Required";
+    surface?: PaidSurfaceMetadata;
+    accepted_payments: Array<{
+        amount: number;
+        asset: string;
+        settlement_rail?: SettlementRail;
+        access_path?: AccessPath;
+    }>;
+    expected_client_behavior: ExpectedClientBehavior;
+    evidence: {
+        receipt_required: boolean;
+        schema_version?: string;
+        required: string[];
+        optional?: string[];
+    };
+    instruction_for_agents: {
+        guide: string;
+        next_request_schema: Record<string, any>;
+    };
+    legacy?: {
+        compatible_challenge_headers: boolean;
+        legacy_hateoas_available: boolean;
+    };
 }
 
 export class Payment402 {
@@ -161,4 +326,151 @@ export class Payment402 {
             }
         };
     }
+
+    private normalizeRequirements(requirements: PaymentRequirement | PaymentRequirement[]): PaymentRequirement[] {
+        return Array.isArray(requirements) ? requirements : [requirements];
+    }
+
+    private getFirstSurface(reqs: PaymentRequirement[]): PaidSurfaceMetadata | undefined {
+        for (const req of reqs) {
+            const casted = req as PaidSurfaceRequirement;
+            if (casted.surface) return casted.surface;
+        }
+        return undefined;
+    }
+
+    // --- Step 2: New Builders ---
+    
+    public buildPaidSurfaceChallenge(
+        requirements: PaymentRequirement | PaymentRequirement[]
+    ): PaidSurfaceChallenge {
+        const reqs = this.normalizeRequirements(requirements);
+        const surface = this.getFirstSurface(reqs);
+
+        const accepted_payments = reqs.map(req => {
+            const casted = req as PaidSurfaceRequirement;
+            return {
+                amount: req.amount,
+                asset: req.asset,
+                ...(casted.surface?.settlement_rail && { settlement_rail: casted.surface.settlement_rail }),
+                ...(casted.surface?.access_path && { access_path: casted.surface.access_path })
+            };
+        });
+
+        const expected_client_behavior = surface?.expected_client_behavior || {
+            action: "pay_and_verify",
+            reason: "Payment is required before executing this endpoint."
+        };
+
+        const evidence_schema = surface?.evidence_schema || {
+            schema_version: "ln_church.execution_receipt.v1",
+            required: [
+                "trace_id",
+                "payment_status",
+                "execution_status",
+                "verification_status",
+                "timestamp"
+            ]
+        };
+
+        return {
+            schema_version: "ln_church.paid_surface_challenge.v1",
+            error: "Payment Required",
+            ...(surface && { surface }),
+            accepted_payments,
+            expected_client_behavior,
+            evidence: {
+                receipt_required: true,
+                ...evidence_schema
+            },
+            instruction_for_agents: {
+                guide: "Select one accepted payment option, submit a valid payment proof, execute once, then verify the execution receipt.",
+                next_request_schema: {
+                    Authorization: "Payment <proof> | L402 <macaroon>:<preimage> | Grant <jws>",
+                    paymentOverride: {
+                        type: "grant",
+                        proof: "<JWS_GRANT_TOKEN>",
+                        asset: "GRANT_CREDIT"
+                    }
+                }
+            },
+            legacy: {
+                compatible_challenge_headers: true,
+                legacy_hateoas_available: true
+            }
+        };
+    }
+
+    public buildExecutionReceipt(input: BuildExecutionReceiptInput): ExecutionReceipt {
+        const trace_id = input.trace_id || `trace_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+        const timestamp = new Date().toISOString();
+
+        const surface = (input.requirement as PaidSurfaceRequirement)?.surface;
+        const payload = input.authResult?.payload;
+
+        // 🛡️ 修正点: payment_status の安全なフォールバック
+        let payment_status = input.payment_status;
+        if (!payment_status) {
+            if (input.authResult) {
+                payment_status = input.authResult.isValid ? "succeeded" : "failed";
+            } else {
+                payment_status = "unknown";
+            }
+        }
+
+        // 🛡️ 修正点: verification_status の安全なフォールバック
+        let verification_status = input.verification_status;
+        if (!verification_status) {
+            if (input.authResult) {
+                verification_status = input.authResult.isValid ? "verified" : "failed";
+            } else {
+                verification_status = "pending";
+            }
+        }
+
+        const execution_status = input.execution_status || "completed";
+
+        const receipt: ExecutionReceipt = {
+            schema_version: "ln_church.execution_receipt.v1",
+            trace_id,
+            ...(surface?.surface_id && { surface_id: surface.surface_id }),
+            ...(surface?.resource && { resource: surface.resource }),
+            ...(surface?.action_type && { action_type: surface.action_type }),
+            
+            payment_status,
+            execution_status,
+            verification_status,
+            
+            ...(input.verification_method && { verification_method: input.verification_method }),
+            ...(input.proof_reference ? { proof_reference: input.proof_reference } : (payload?.receiptId ? { proof_reference: payload.receiptId } : {})),
+            ...(input.recorded_hash && { recorded_hash: input.recorded_hash }),
+            timestamp,
+        };
+
+        if (payload) {
+            receipt.payment = {
+                ...(payload.asset && { asset: payload.asset }),
+                ...(payload.settledAmount !== undefined && { amount: payload.settledAmount }),
+                ...(payload.settlementRail ? { settlement_rail: payload.settlementRail } : (surface?.settlement_rail ? { settlement_rail: surface.settlement_rail } : {})),
+                ...(payload.accessPath ? { access_path: payload.accessPath } : (surface?.access_path ? { access_path: surface.access_path } : {})),
+                ...(payload.receiptId && { receipt_id: payload.receiptId })
+            };
+        }
+
+        const deterministic = input.result?.deterministic ?? surface?.deterministic;
+        if (input.result || deterministic !== undefined || surface?.output_schema) {
+            receipt.result = {
+                ...(deterministic !== undefined && { deterministic }),
+                ...(input.result?.output_hash && { output_hash: input.result.output_hash }),
+                ...(input.result?.output_schema ? { output_schema: input.result.output_schema } : (surface?.output_schema ? { output_schema: surface.output_schema } : {}))
+            };
+        }
+
+        if (input.meta) {
+            receipt.meta = input.meta;
+        }
+
+        return receipt;
+    }
 }
+

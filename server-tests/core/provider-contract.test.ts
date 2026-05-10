@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { Payment402, PaymentRequirement } from '../../packages/core/src/index';
+import { Payment402, PaymentRequirement, PaidSurfaceRequirement } from '../../packages/core/src/index';
 
 describe('Payment402 Canonical Provider Contract', () => {
     // モック用のVerifier（今回はヘッダーテストなので空でOK）
@@ -20,5 +20,141 @@ describe('Payment402 Canonical Provider Contract', () => {
 
         expect(headers['PAYMENT-RESPONSE']).toBe('status="success", receipt="base64-encoded-receipt-token"');
         expect(headers['Payment-Receipt']).toBe('base64-encoded-receipt-token');
+    });
+
+    // --- Added for v1.7.0 ---
+    test('PaidSurfaceRequirement is seamlessly backward compatible with buildChallengeHeaders', () => {
+        const paidSurfaceReq: PaidSurfaceRequirement = {
+            amount: 10,
+            asset: "SATS",
+            surface: {
+                surface_id: "benchmark:ping:v1",
+                resource: "/api/agent/benchmark/ping",
+                action_type: "benchmark_ping",
+                payment_intent: "benchmark",
+                settlement_rail: "l402",
+                deterministic: true,
+                expected_client_behavior: {
+                    action: "pay_and_verify",
+                    reason: "Deterministic paid benchmark endpoint."
+                },
+                evidence_schema: {
+                    schema_version: "monzen_trace.v1",
+                    required: [
+                        "trace_id",
+                        "payment_status",
+                        "execution_status",
+                        "verification_status",
+                        "timestamp"
+                    ]
+                }
+            }
+        };
+
+        const headers = payment402.buildChallengeHeaders(paidSurfaceReq);
+        
+        // Ensure standard requirement properties map out perfectly.
+        expect(headers['x-402-payment-required']).toBe('price=10; asset=SATS; network=lightning');
+        expect(headers['PAYMENT-REQUIRED']).toBe('network="lightning", amount="10", asset="SATS"');
+    });
+
+    // --- Added for v1.7.0 Step 2 ---
+    test('1. buildPaidSurfaceChallenge returns agent-readable challenge', () => {
+        const paidSurfaceReq: PaidSurfaceRequirement = {
+            amount: 10,
+            asset: "SATS",
+            surface: {
+                surface_id: "benchmark:ping:v1",
+                resource: "/api/agent/benchmark/ping",
+                action_type: "benchmark_ping",
+                payment_intent: "benchmark",
+                settlement_rail: "l402",
+                deterministic: true,
+                expected_client_behavior: { action: "pay_and_verify", reason: "testing" },
+                evidence_schema: {
+                    schema_version: "ln_church.execution_receipt.v1",
+                    required: ["trace_id", "payment_status"]
+                }
+            }
+        };
+
+        const challenge = payment402.buildPaidSurfaceChallenge(paidSurfaceReq);
+        
+        expect(challenge.schema_version).toBe("ln_church.paid_surface_challenge.v1");
+        expect(challenge.error).toBe("Payment Required");
+        expect(challenge.surface?.surface_id).toBe("benchmark:ping:v1");
+        expect(challenge.accepted_payments[0].amount).toBe(10);
+        expect(challenge.accepted_payments[0].asset).toBe("SATS");
+        expect(challenge.accepted_payments[0].settlement_rail).toBe("l402");
+        expect(challenge.expected_client_behavior.action).toBe("pay_and_verify");
+        expect(challenge.evidence.required).toContain("trace_id");
+        expect(challenge.instruction_for_agents.next_request_schema).toBeDefined();
+    });
+
+    test('2. buildPaidSurfaceChallenge supports legacy PaymentRequirement', () => {
+        const legacyReq: PaymentRequirement = { amount: 50, asset: "SATS" };
+        const challenge = payment402.buildPaidSurfaceChallenge(legacyReq);
+
+        expect(challenge.accepted_payments[0].amount).toBe(50);
+        expect(challenge.expected_client_behavior.action).toBe("pay_and_verify"); // Fallback
+        expect(challenge.surface).toBeUndefined();
+    });
+
+    test('3. buildExecutionReceipt creates standard receipt', () => {
+        const paidSurfaceReq: PaidSurfaceRequirement = {
+            amount: 10,
+            asset: "SATS",
+            surface: { surface_id: "benchmark:ping:v1" }
+        };
+
+        const receipt = payment402.buildExecutionReceipt({
+            trace_id: "trace_test_001",
+            requirement: paidSurfaceReq,
+            authResult: {
+                isValid: true,
+                scheme: "mock",
+                payload: {
+                    agentId: "agent-1",
+                    settledAmount: 10,
+                    asset: "SATS",
+                    receiptId: "receipt-123",
+                    settlementRail: "l402"
+                }
+            }
+        });
+
+        expect(receipt.schema_version).toBe("ln_church.execution_receipt.v1");
+        expect(receipt.trace_id).toBe("trace_test_001");
+        expect(receipt.surface_id).toBe("benchmark:ping:v1");
+        expect(receipt.payment_status).toBe("succeeded");
+        expect(receipt.payment?.amount).toBe(10);
+        expect(receipt.payment?.asset).toBe("SATS");
+        expect(receipt.proof_reference).toBe("receipt-123");
+        expect(receipt.timestamp).toBeDefined();
+    });
+
+    test('4. buildExecutionReceipt handles authResult.isValid === false correctly', () => {
+        const paidSurfaceReq: PaidSurfaceRequirement = {
+            amount: 10,
+            asset: "SATS",
+            surface: { surface_id: "benchmark:ping:v1" }
+        };
+
+        const receipt = payment402.buildExecutionReceipt({
+            trace_id: "trace_failed_001",
+            requirement: paidSurfaceReq,
+            // 決済検証に失敗したケース
+            authResult: {
+                isValid: false,
+                error: "Invalid signature"
+            }
+        });
+
+        expect(receipt.schema_version).toBe("ln_church.execution_receipt.v1");
+        expect(receipt.trace_id).toBe("trace_failed_001");
+        // 最も重要な検証：失敗時は succeeded/verified になってはいけない
+        expect(receipt.payment_status).toBe("failed");
+        expect(receipt.verification_status).toBe("failed");
+        expect(receipt.execution_status).toBe("completed"); 
     });
 });

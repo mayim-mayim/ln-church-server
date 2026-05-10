@@ -2,9 +2,25 @@
 
 All notable changes to the `@ln-church/server` and Monzenmachi Hono Starter Kit will be documented in this file.
 
-# Changelog
+## [1.7.0] - 2026-05-10 (Agent-Readable Paid Surface Runtime)
 
-All notable changes to the `@ln-church/server` and Monzenmachi Hono Starter Kit will be documented in this file.
+### Added
+* **Agent-Readable Paid Surface Runtime**: Introduced `PaidSurfaceRequirement`, `PaidSurfaceMetadata`, and `ExecutionReceipt` as the foundation for provider-side paid surfaces that agents can inspect, pay, execute, and verify without guessing payment mechanics.
+* **Paid Surface Challenge Builder**: Added `Payment402.buildPaidSurfaceChallenge()` to emit machine-readable HTTP 402 response bodies with `surface_id`, `accepted_payments`, `expected_client_behavior`, and `evidence_schema`.
+* **Execution Receipt Builder**: Added `Payment402.buildExecutionReceipt()` to produce standardized server-side execution evidence using `ln_church.execution_receipt.v1`.
+* **Benchmark Ping Paid Surface**: Upgraded `GET /api/agent/benchmark/ping` to return `ln_church.paid_surface_challenge.v1` when unpaid and `execution_receipt` when paid.
+* **Built-in Skill Paid Surfaces**: Upgraded `json-repair`, `compressor`, and `omikuji` routes to expose agent-readable paid surface challenges and execution receipts.
+* **Paid Surface Catalog**: Added `paid_surfaces` to `/api/agent/manifest`, allowing agents to discover supported paid surfaces, accepted assets, settlement rails, access paths, expected behavior, and receipt schema before calling endpoints.
+* **Faucet Onboarding Hints**: Added `paid_surface_id`, `agent_readable`, and `expected_client_behavior` hints to the faucet onboarding flow.
+
+### Changed
+* Existing skill and benchmark endpoints now preserve legacy HTTP 402 / receipt headers while adding machine-readable paid surface bodies and execution receipts.
+* `GRANT_CREDIT` access is represented as `settlement_rail: "none"` and `access_path: "sponsored_grant"` where applicable.
+
+### Notes
+* Existing `PaymentRequirement`, `Payment402.verify()`, challenge headers, and receipt headers remain backward compatible.
+* This release positions `ln-church-server` as a seller-side runtime for turning provider capabilities into agent-readable paid API surfaces.
+
 
 ## [1.6.1] - 2026-05-08 (Sponsored Access Grant Semantics)
 

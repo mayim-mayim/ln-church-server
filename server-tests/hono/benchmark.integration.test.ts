@@ -52,15 +52,33 @@ describe('Benchmark Suite Integration', () => {
         scope: { routes: ["/ping", "/echo"], methods: ["GET", "POST"] }
     };
 
-    // 象限1: Unpaid Ping
-    test('GET /ping unpaid -> returns 402 challenge', async () => {
+    // 象限1: Unpaid Ping (強化版)
+    test('GET /ping unpaid -> returns 402 challenge with paid surface metadata', async () => {
         const res = await benchmarkApp.request(new Request('http://localhost/ping'), undefined, mockEnv);
+        
+        // ヘッダーの互換性維持を確認
         expect(res.status).toBe(402);
         expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+        
+        // Paid Surface Challenge の内容確認
+        const json = await res.json();
+        expect(json.schema_version).toBe("ln_church.paid_surface_challenge.v1");
+        expect(json.error).toBe("Payment Required");
+        expect(json.surface.surface_id).toBe("benchmark:ping:v1");
+        expect(json.surface.action_type).toBe("benchmark_ping");
+        
+        expect(json.accepted_payments.length).toBeGreaterThanOrEqual(3);
+        expect(json.accepted_payments.some((p: any) => p.asset === "SATS")).toBe(true);
+        expect(json.accepted_payments.some((p: any) => p.asset === "FAUCET_CREDIT")).toBe(true);
+        expect(json.accepted_payments.some((p: any) => p.asset === "GRANT_CREDIT")).toBe(true);
+        
+        expect(json.expected_client_behavior.action).toBe("pay_and_verify");
+        expect(json.evidence.required).toContain("trace_id");
+        expect(json.instruction_for_agents.next_request_schema).toBeDefined();
     });
 
-    // 象限2: Paid Ping (新規追加)
-    test('GET /ping paid -> returns deterministic response', async () => {
+    // 象限2: Paid Ping (強化版)
+    test('GET /ping paid -> returns deterministic response with execution receipt', async () => {
         const verifier = new FaucetVerifier({ secret: mockEnv.FAUCET_SECRET });
         const validToken = await verifier.generateGrantToken('benchmark-agent');
 
@@ -69,12 +87,27 @@ describe('Benchmark Suite Integration', () => {
         });
         
         const res = await benchmarkApp.request(req, undefined, mockEnv);
-        const json = await res.json();
         
+        // ヘッダーの互換性確認
         expect(res.status).toBe(200);
+        expect(res.headers.get('PAYMENT-RESPONSE')).toContain('status="success"');
+        expect(res.headers.get('Payment-Receipt')).toBeTruthy();
+
+        // 既存フィールドと Receipt の確認
+        const json = await res.json();
         expect(json.scenario).toBe("ping-v1");
         expect(json.result).toBe("ok");
         expect(json.deterministic).toBe(true);
+        
+        expect(json.execution_receipt).toBeDefined();
+        expect(json.execution_receipt.schema_version).toBe("ln_church.execution_receipt.v1");
+        expect(json.execution_receipt.surface_id).toBe("benchmark:ping:v1");
+        expect(json.execution_receipt.action_type).toBe("benchmark_ping");
+        expect(json.execution_receipt.payment_status).toBe("succeeded");
+        expect(json.execution_receipt.execution_status).toBe("completed");
+        expect(json.execution_receipt.verification_status).toBe("verified");
+        expect(json.execution_receipt.result.deterministic).toBe(true);
+        expect(json.execution_receipt.timestamp).toBeDefined();
     });
 
     // 象限3: Unpaid Echo (新規追加)
@@ -109,13 +142,13 @@ describe('Benchmark Suite Integration', () => {
         expect(json.deterministic).toBe(true);
     });
 
-    // 象限5: Paid Ping (Grant)
-    test('GET /ping paid via Grant -> returns deterministic response', async () => {
+    // 象限5: Paid Ping (Grant) (強化版)
+    test('GET /ping paid via Grant -> returns deterministic response with accurate settlement rail metadata', async () => {
         const proof = await createMockGrant(validGrantClaims, mockEnv.TEST_GRANT_SECRET);
         const req = new Request('http://localhost/ping', {
             headers: { 
                 'Authorization': `Grant ${proof}`,
-                'x-agent-id': 'benchmark-grant-agent' // sub と一致させる
+                'x-agent-id': 'benchmark-grant-agent'
             }
         });
         const res = await benchmarkApp.request(req, undefined, mockEnv);
@@ -124,6 +157,12 @@ describe('Benchmark Suite Integration', () => {
         expect(res.status).toBe(200);
         expect(json.scenario).toBe("ping-v1");
         expect(json.deterministic).toBe(true);
+
+        // Grant 決済レール情報の確認
+        expect(json.execution_receipt).toBeDefined();
+        expect(json.execution_receipt.payment.asset).toBe("GRANT_CREDIT");
+        expect(json.execution_receipt.payment.settlement_rail).toBe("none");
+        expect(json.execution_receipt.payment.access_path).toBe("sponsored_grant");
     });
 
     // 象限6: Paid Echo (Grant / paymentOverride)
