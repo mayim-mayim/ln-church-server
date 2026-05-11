@@ -255,6 +255,13 @@ An experimental pre-payment access path for sponsor-funded execution.
 
 ---
 
+### Standard-ready adapter boundary
+
+`PaidSurfaceRequirement` is an internal provider-side descriptor, not a competing standard. 
+As external payment and commerce protocols evolve, `ln-church-server` can map the same internal route definitions into future external profiles through mapper boundaries while keeping existing clients backward compatible.
+
+---
+
 ## 🛡️ Security: Replay Protection
 
 This kit includes an edge-native `ReceiptStore` implementation backed by **Cloudflare KV**. Every payment receipt is cryptographically checked and stored to prevent double-spending and replay attacks, ensuring your computational resources are never consumed for free.
