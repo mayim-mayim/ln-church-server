@@ -1,5 +1,12 @@
 import { describe, test, expect } from 'vitest';
-import { Payment402, PaymentRequirement, PaidSurfaceRequirement } from '../../packages/core/src/index';
+import { 
+    Payment402, 
+    PaymentRequirement, 
+    PaidSurfaceRequirement, 
+    lnChurchV1Mapper, 
+    UnsupportedStandardProfileError,
+    PaidSurfaceChallenge 
+} from '../../packages/core/src/index';
 
 describe('Payment402 Canonical Provider Contract', () => {
     // モック用のVerifier（今回はヘッダーテストなので空でOK）
@@ -156,5 +163,62 @@ describe('Payment402 Canonical Provider Contract', () => {
         expect(receipt.payment_status).toBe("failed");
         expect(receipt.verification_status).toBe("failed");
         expect(receipt.execution_status).toBe("completed"); 
+    });
+});
+
+describe('Adapter Boundary (v1.7.1)', () => {
+    const payment402 = new Payment402([]);
+    
+    const paidSurfaceReq: PaidSurfaceRequirement = {
+        amount: 10,
+        asset: "SATS",
+        surface: {
+            surface_id: "benchmark:ping:v1",
+            standard_profiles: [
+                { profile: "ln_church.v1", status: "native" },
+                { profile: "mpp", status: "planned" }
+            ],
+            raw: { originalChallenge: "test-data" },
+            external_refs: [
+                { profile: "mpp", version: "future", url: "https://example.com/future-mpp-spec" }
+            ]
+        }
+    };
+
+    test('1. default output remains unchanged for ln_church.v1', () => {
+        const defaultChallenge = payment402.buildPaidSurfaceChallenge(paidSurfaceReq);
+        const profiledChallenge = payment402.buildPaidSurfaceChallenge(paidSurfaceReq, { profile: "ln_church.v1" });
+        expect(profiledChallenge).toEqual(defaultChallenge);
+    });
+
+    test('2. lnChurchV1Mapper is an identity mapper', () => {
+        const challenge = payment402.buildPaidSurfaceChallenge(paidSurfaceReq);
+        expect(lnChurchV1Mapper.mapChallenge(challenge)).toEqual(challenge);
+    });
+
+    test('3. unsupported profile throws UnsupportedStandardProfileError', () => {
+        expect(() => {
+            payment402.buildPaidSurfaceChallenge(paidSurfaceReq, { profile: "mpp" });
+        }).toThrow(UnsupportedStandardProfileError);
+        
+        expect(() => {
+            payment402.buildPaidSurfaceChallenge(paidSurfaceReq, { profile: "x402" });
+        }).toThrow("Standard profile 'x402' is not implemented in this build.");
+    });
+
+    test('4 profile and mapper mismatch throws Error', () => {
+        expect(() => {
+            payment402.buildPaidSurfaceChallenge(paidSurfaceReq, { 
+                profile: "mpp", 
+                mapper: lnChurchV1Mapper // mapper.profile は "ln_church.v1"
+            });
+        }).toThrow("Profile mismatch: requested mpp, mapper provides ln_church.v1");
+    });
+
+    test('5. PaidSurfaceMetadata accepts raw/external_refs/standard_profiles additively', () => {
+        const challenge = payment402.buildPaidSurfaceChallenge(paidSurfaceReq);
+        expect(challenge.surface?.standard_profiles).toBeDefined();
+        expect(challenge.surface?.raw?.originalChallenge).toBe("test-data");
+        expect(challenge.surface?.external_refs?.[0].profile).toBe("mpp");
     });
 });

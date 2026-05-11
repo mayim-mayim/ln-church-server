@@ -85,8 +85,25 @@ export interface PaidSurfaceMetadata {
   evidence_schema?: EvidenceSchema;
   input_schema?: Record<string, any>;
   output_schema?: Record<string, any>;
+  
+  // v1.7.1 Standard-Ready Adapter Boundary
+  standard_profiles?: StandardProfileDescriptor[];
+  raw?: Record<string, unknown>;
+  external_refs?: Array<{
+    profile: StandardProfile;
+    version?: string;
+    url?: string;
+    fields?: Record<string, unknown>;
+  }>;
 }
 
+/**
+ * Provider-side internal descriptor for paid API surfaces.
+ *
+ * This is not a replacement for AP2, ACP, x402, MPP, L402, or any future standard.
+ * It provides a stable internal model so existing routes can remain backward compatible
+ * while external standard mappings evolve through profile mappers.
+ */
 export interface PaidSurfaceRequirement extends PaymentRequirement {
   surface?: PaidSurfaceMetadata;
 }
@@ -215,6 +232,60 @@ export interface PaidSurfaceChallenge {
     };
 }
 
+// --- v1.7.1 ---
+export type StandardProfile =
+  | "ln_church.v1"
+  | "http402.generic"
+  | "l402"
+  | "x402"
+  | "mpp"
+  | "ap2_observation"
+  | "acp_observation"
+  | "unknown";
+
+export type StandardMappingStatus =
+  | "native"
+  | "compatible"
+  | "experimental"
+  | "planned"
+  | "unsupported";
+
+export interface StandardProfileDescriptor {
+  profile: StandardProfile;
+  status: StandardMappingStatus;
+  description?: string;
+}
+
+export interface PaidSurfaceMapper<TChallenge = unknown, TReceipt = unknown> {
+  profile: StandardProfile;
+  mapRequirement?(requirement: PaidSurfaceRequirement): unknown;
+  mapChallenge(challenge: PaidSurfaceChallenge): TChallenge;
+  mapReceipt?(receipt: ExecutionReceipt): TReceipt;
+}
+
+export const lnChurchV1Mapper: PaidSurfaceMapper<PaidSurfaceChallenge, ExecutionReceipt> = {
+  profile: "ln_church.v1",
+  mapChallenge: (challenge) => challenge,
+  mapReceipt: (receipt) => receipt
+};
+
+export class UnsupportedStandardProfileError extends Error {
+  constructor(profile: StandardProfile) {
+    super(`Standard profile '${profile}' is not implemented in this build.`);
+    this.name = "UnsupportedStandardProfileError";
+  }
+}
+
+export interface BuildPaidSurfaceChallengeOptions {
+  profile?: StandardProfile;
+  mapper?: PaidSurfaceMapper<any, any>;
+}
+
+export interface BuildExecutionReceiptOptions {
+  profile?: StandardProfile;
+  mapper?: PaidSurfaceMapper<any, any>;
+}
+
 export class Payment402 {
     private receiptStore?: ReceiptStore;
 
@@ -267,7 +338,7 @@ export class Payment402 {
         return authResult;
     }
 
-    // 🌟 新規追加: Provider Contract の標準化 (Challenge)
+    // 🌟 Provider Contract の標準化 (Challenge)
     public buildChallengeHeaders(
         requirements: PaymentRequirement | PaymentRequirement[], 
         options?: ChallengeOptions
@@ -285,7 +356,7 @@ export class Payment402 {
         };
     }
 
-    // 🌟 新規追加: Provider Contract の標準化 (Receipt)
+    // 🌟 Provider Contract の標準化 (Receipt)
     public buildSuccessReceiptHeaders(receiptToken: string): ReceiptHeaders {
         return {
             'PAYMENT-RESPONSE': `status="success", receipt="${receiptToken}"`,
@@ -339,11 +410,30 @@ export class Payment402 {
         return undefined;
     }
 
-    // --- Step 2: New Builders ---
-    
+    // ========== 1. buildPaidSurfaceChallenge のオーバーロードと実装 ==========
     public buildPaidSurfaceChallenge(
         requirements: PaymentRequirement | PaymentRequirement[]
-    ): PaidSurfaceChallenge {
+    ): PaidSurfaceChallenge;
+    public buildPaidSurfaceChallenge(
+        requirements: PaymentRequirement | PaymentRequirement[],
+        options: { profile: "ln_church.v1" }
+    ): PaidSurfaceChallenge;
+    public buildPaidSurfaceChallenge<T>(
+        requirements: PaymentRequirement | PaymentRequirement[],
+        options: { mapper: PaidSurfaceMapper<T, any> }
+    ): T;
+    public buildPaidSurfaceChallenge(
+        requirements: PaymentRequirement | PaymentRequirement[],
+        options: BuildPaidSurfaceChallengeOptions
+    ): unknown;
+    public buildPaidSurfaceChallenge(
+        requirements: PaymentRequirement | PaymentRequirement[],
+        options?: BuildPaidSurfaceChallengeOptions
+    ): unknown {
+        if (options?.profile && options?.mapper && options.profile !== options.mapper.profile) {
+            throw new Error(`Profile mismatch: requested ${options.profile}, mapper provides ${options.mapper.profile}`);
+        }
+
         const reqs = this.normalizeRequirements(requirements);
         const surface = this.getFirstSurface(reqs);
 
@@ -373,7 +463,7 @@ export class Payment402 {
             ]
         };
 
-        return {
+        const challenge: PaidSurfaceChallenge = {
             schema_version: "ln_church.paid_surface_challenge.v1",
             error: "Payment Required",
             ...(surface && { surface }),
@@ -399,16 +489,40 @@ export class Payment402 {
                 legacy_hateoas_available: true
             }
         };
+
+        if (options?.mapper) {
+            return options.mapper.mapChallenge(challenge);
+        }
+
+        if (options?.profile && options.profile !== "ln_church.v1") {
+            throw new UnsupportedStandardProfileError(options.profile);
+        }
+
+        return challenge;
     }
 
-    public buildExecutionReceipt(input: BuildExecutionReceiptInput): ExecutionReceipt {
+    // ========== 2. buildExecutionReceipt のオーバーロードと実装 ==========
+    public buildExecutionReceipt(input: BuildExecutionReceiptInput): ExecutionReceipt;
+    public buildExecutionReceipt(input: BuildExecutionReceiptInput, options: { profile: "ln_church.v1" }): ExecutionReceipt;
+    public buildExecutionReceipt<T>(input: BuildExecutionReceiptInput, options: { mapper: PaidSurfaceMapper<any, T> }): T;
+    public buildExecutionReceipt(
+        input: BuildExecutionReceiptInput,
+        options: BuildExecutionReceiptOptions
+    ): unknown;
+    public buildExecutionReceipt(
+        input: BuildExecutionReceiptInput,
+        options?: BuildExecutionReceiptOptions
+    ): unknown {
+        if (options?.profile && options?.mapper && options.profile !== options.mapper.profile) {
+            throw new Error(`Profile mismatch: requested ${options.profile}, mapper provides ${options.mapper.profile}`);
+        }
+
         const trace_id = input.trace_id || `trace_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
         const timestamp = new Date().toISOString();
 
         const surface = (input.requirement as PaidSurfaceRequirement)?.surface;
         const payload = input.authResult?.payload;
 
-        // 🛡️ 修正点: payment_status の安全なフォールバック
         let payment_status = input.payment_status;
         if (!payment_status) {
             if (input.authResult) {
@@ -418,7 +532,6 @@ export class Payment402 {
             }
         }
 
-        // 🛡️ 修正点: verification_status の安全なフォールバック
         let verification_status = input.verification_status;
         if (!verification_status) {
             if (input.authResult) {
@@ -468,6 +581,14 @@ export class Payment402 {
 
         if (input.meta) {
             receipt.meta = input.meta;
+        }
+
+        if (options?.mapper?.mapReceipt) {
+            return options.mapper.mapReceipt(receipt);
+        }
+
+        if (options?.profile && options.profile !== "ln_church.v1") {
+            throw new UnsupportedStandardProfileError(options.profile);
         }
 
         return receipt;

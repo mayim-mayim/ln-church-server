@@ -116,4 +116,28 @@ describe('System Routes Integration (Benchmark-First)', () => {
         expect(omikujiGrant.settlement_rail).toBe("none");
         expect(omikujiGrant.access_path).toBe("sponsored_grant");
     });
+
+    test('Manifest exposes standard-ready paid_surface_profiles', async () => {
+        const res = await systemApp.request(new Request('http://localhost/manifest'), undefined, mockEnv);
+        const json = await res.json();
+        
+        expect(json.paid_surface_profiles).toBeDefined();
+        expect(Array.isArray(json.paid_surface_profiles)).toBe(true);
+
+        const lnChurch = json.paid_surface_profiles.find((p: any) => p.profile === "ln_church.v1");
+        expect(lnChurch.status).toBe("native");
+
+        const l402 = json.paid_surface_profiles.find((p: any) => p.profile === "l402");
+        expect(l402.status).toBe("compatible");
+
+        const x402 = json.paid_surface_profiles.find((p: any) => p.profile === "x402");
+        expect(x402.status).toBe("planned");
+
+        const mpp = json.paid_surface_profiles.find((p: any) => p.profile === "mpp");
+        expect(mpp.status).toBe("planned");
+
+        const ap2 = json.paid_surface_profiles.find((p: any) => p.profile === "ap2_observation");
+        expect(ap2.status).toBe("planned");
+        expect(ap2.description).toContain("Not a settlement rail");
+    });
 });

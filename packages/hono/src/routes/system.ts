@@ -178,6 +178,43 @@ systemApp.get('/manifest', (c) => {
             COMPRESSOR_PAID_SURFACE,
             OMIKUJI_PAID_SURFACE
         ],
+        paid_surface_profiles: [
+            {
+                profile: "ln_church.v1",
+                status: "native",
+                description: "Current LN Church provider-side descriptor and response profile."
+            },
+            {
+                profile: "http402.generic",
+                status: "compatible",
+                description: "Canonical HTTP 402 headers remain backward compatible."
+            },
+            {
+                profile: "l402",
+                status: "compatible",
+                description: "Current server-side verifier supports L402 settlement via Authorization header."
+            },
+            {
+                profile: "x402",
+                status: "planned",
+                description: "Profile boundary reserved for future x402 metadata mapping. Not implemented as a verifier in this package."
+            },
+            {
+                profile: "mpp",
+                status: "planned",
+                description: "Profile boundary reserved for future MPP metadata mapping. Not implemented as a verifier in this package."
+            },
+            {
+                profile: "ap2_observation",
+                status: "planned",
+                description: "Observation-only profile boundary for AP2-like commerce metadata. Not a settlement rail."
+            },
+            {
+                profile: "acp_observation",
+                status: "planned",
+                description: "Observation-only profile boundary for ACP-like commerce metadata. Not a settlement rail."
+            }
+        ],
         network_participation: {
             status: "opt-in",
             instruction_for_agent: "Execute a POST request to join_endpoint to list this benchmark node on the global Shrine network.",

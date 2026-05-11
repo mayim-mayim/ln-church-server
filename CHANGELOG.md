@@ -2,6 +2,19 @@
 
 All notable changes to the `@ln-church/server` and Monzenmachi Hono Starter Kit will be documented in this file.
 
+## [1.7.1] - 2026-05-11 (Standard-Ready Adapter Boundary)
+
+### Added
+- Added `StandardProfile` and `StandardMappingStatus` types to separate internal paid surface descriptors from future external standard profiles.
+- Added `PaidSurfaceMapper` and `lnChurchV1Mapper` as the first identity mapper for the existing LN Church v1 response profile.
+- Added optional profile/mapper support to paid surface challenge generation while preserving the v1.7.0 default output.
+- Added manifest-level `paid_surface_profiles` metadata to clarify native, compatible, planned, and observation-only mappings.
+
+### Notes
+- This release does not claim support for MPP, x402, AP2, or ACP provider-side settlement.
+- AP2/ACP profiles are observation-only placeholders, not settlement rails.
+- Existing `PaymentRequirement`, `buildChallengeHeaders()`, `buildPaidSurfaceChallenge()`, and route responses remain backward compatible.
+
 ## [1.7.0] - 2026-05-10 (Agent-Readable Paid Surface Runtime)
 
 ### Added
