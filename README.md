@@ -229,6 +229,42 @@ The manifest includes `paid_surfaces`, accepted payment options, expected client
 
 ---
 
+## Paid Surface Diagnostics
+
+`ln-church-server` can query LN Church Observatory for public-safe observations about your own paid surfaces.
+
+This lets site operators check whether agents have observed payment frictions such as:
+- retry mismatch
+- no matching payment requirements
+- post-settlement proof required
+- receipt verification failure
+
+**Important Safety Constraints:**
+- These records are **not verdicts** about endpoint correctness. They are observed client/runtime conditions.
+- `ln-church-server` does not automatically poll, send telemetry, or ingest direct feedback from agents.
+- The LN Church Observatory is a public ledger, and this SDK provides a strictly **read-only** helper to query it on demand.
+
+**Helper Usage:**
+```ts
+import { ShrineClient } from "@ln-church/hono";
+
+const shrine = new ShrineClient("https://kari.mayim-mayim.com", "example.com");
+
+const result = await shrine.fetchFailureObservations({
+  targetDomain: "example.com",
+  limit: 20
+});
+
+```
+
+**Diagnostic Route Example:**
+If you have mounted the built-in system routes (`/api/agent/*`), you can run a diagnostic check manually:
+
+```bash
+curl "https://your-node.example/api/agent/observations?domain=example.com"
+```
+---
+
 ## 💳 Payment Paths
 
 This server supports two distinct access models through a single, unified execution surface.

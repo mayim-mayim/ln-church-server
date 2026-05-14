@@ -149,4 +149,66 @@ export class ShrineClient {
             return null;
         }
     }
+
+    /**
+     * 🔍 Paid Surface Diagnostics (Seller-Side Observation Lookup)
+     * 本殿に記録された自身の 402 Endpoint の摩擦観測結果を Read-Only で照会します。
+     */
+    async fetchFailureObservations(options: FailureObservationLookupOptions): Promise<FailureObservationLookupResult | null> {
+        if (!options.targetDomain && !options.targetUrl) {
+            throw new Error("Either targetDomain or targetUrl must be provided.");
+        }
+
+        const params = new URLSearchParams();
+        if (options.targetDomain) params.append('targetDomain', options.targetDomain);
+        if (options.targetUrl) params.append('targetUrl', options.targetUrl);
+        if (options.limit) params.append('limit', options.limit.toString());
+
+        const url = `${this.mainShrineUrl}/api/agent/external/failure-observations?${params.toString()}`;
+        
+        try {
+            const res = await fetch(url);
+            if (!res.ok) {
+                return null; // 本殿の障害時は安全に null を返す
+            }
+            const data = await res.json() as FailureObservationLookupResult;
+            return data;
+        } catch (error) {
+            console.error(`[ShrineClient] Failed to fetch failure observations:`, error);
+            return null; // 通信失敗時も throw せず null を返す
+        }
+    }
 }
+
+export type FailureObservationLookupOptions = {
+    targetDomain?: string;
+    targetUrl?: string;
+    limit?: number;
+};
+
+export type FailureObservationItem = {
+    observation_id?: string;
+    target_domain?: string;
+    target_url?: string;
+    rail?: string;
+    network?: string;
+    asset?: string;
+    failure_class?: string;
+    failure_subclass?: string;
+    changed_fields?: string[];
+    evidence_strength?: string;
+    confidence?: string;
+    reproducibility?: string;
+    observed_at?: number | string;
+    not_a_verdict?: boolean;
+};
+
+export type FailureObservationLookupResult = {
+    status: string;
+    targetDomain?: string;
+    count?: number;
+    latest_observed_at?: number | string;
+    failure_classes?: Record<string, number>;
+    items: FailureObservationItem[];
+    disclaimer?: string;
+};

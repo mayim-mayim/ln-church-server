@@ -223,4 +223,71 @@ systemApp.get('/manifest', (c) => {
     });
 });
 
+// 🔍 Paid Surface Diagnostics (Seller-Side Observation Lookup)
+// GET /api/agent/observations?domain=example.com または ?url=https://example.com/api/...
+systemApp.get('/observations', async (c) => {
+    const domain = c.req.query('domain');
+    const url = c.req.query('url');
+
+    if (!domain && !url) {
+        return c.json({
+            status: "error",
+            error_code: "INVALID_PARAMETER",
+            message: "Either 'domain' or 'url' query parameter is required."
+        }, 400);
+    }
+
+    const shrineClient = new ShrineClient(c.env.MAIN_SHRINE_URL, c.env.MY_NODE_DOMAIN);
+    const result = await shrineClient.fetchFailureObservations({
+        targetDomain: domain,
+        targetUrl: url,
+        limit: parseInt(c.req.query('limit') || '20', 10)
+    });
+
+    if (!result) {
+        // 通信失敗または 404 の場合は安全な空の Diagnostic レスポンスを返す
+        return c.json({
+            status: "success",
+            diagnostic_type: "seller_side_observation_lookup",
+            not_a_verdict: true,
+            source: "LN Church Observatory",
+            target: { domain: domain || "", url: url || "" },
+            summary: { count: 0 },
+            items: [],
+            disclaimer: "Failed to communicate with LN Church Observatory or no records found. These are observed payment frictions under specific client/runtime conditions. They are not verdicts about endpoint correctness."
+        }, 200);
+    }
+
+    // Top Failure Class の算出
+    let topFailureClass = "unknown";
+    if (result.failure_classes && Object.keys(result.failure_classes).length > 0) {
+        topFailureClass = Object.entries(result.failure_classes).sort((a, b) => b[1] - a[1])[0][0];
+    }
+
+    // Evidence Strength の簡易算出
+    let maxEvidenceStrength = "unknown";
+    if (result.items && result.items.length > 0) {
+        maxEvidenceStrength = result.items[0].evidence_strength || "unknown";
+    }
+
+    return c.json({
+        status: "success",
+        diagnostic_type: "seller_side_observation_lookup",
+        not_a_verdict: true,
+        source: "LN Church Observatory",
+        target: {
+            domain: domain || result.targetDomain || "",
+            url: url || ""
+        },
+        summary: {
+            count: result.count || 0,
+            top_failure_class: topFailureClass,
+            max_evidence_strength: maxEvidenceStrength,
+            latest_observed_at: result.latest_observed_at || 0
+        },
+        items: result.items || [],
+        disclaimer: result.disclaimer || "These are observed payment frictions under specific client/runtime conditions. They are not verdicts about endpoint correctness."
+    });
+});
+
 export default systemApp;

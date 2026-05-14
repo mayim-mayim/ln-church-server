@@ -2,6 +2,20 @@
 
 All notable changes to the `@ln-church/server` and Monzenmachi Hono Starter Kit will be documented in this file.
 
+## [1.8.0] - 2026-05-14 (Seller-Side Observation Lookup)
+
+### Added
+- Added read-only seller-side lookup for LN Church failure observations.
+- Added `ShrineClient.fetchFailureObservations` helper for querying `/api/agent/external/failure-observations`.
+- Added optional Hono system route `GET /api/agent/observations` for paid surface diagnostics.
+- Added README guidance for checking how agent-observed payment frictions relate to your own 402 endpoints.
+
+### Safety
+- No automatic telemetry or polling.
+- No agent-to-server failure feedback ingestion.
+- No POST to LN Church Observatory from the server SDK.
+- Observations are treated as client/runtime conditions, not verdicts about endpoint correctness.
+
 ## [1.7.1] - 2026-05-11 (Standard-Ready Adapter Boundary)
 
 ### Added
